@@ -2,23 +2,12 @@
   "entities": {
     "User": {
       "title": "User",
-      "description": "User profile information",
+      "description": "User profile and medical baseline information",
       "type": "object",
       "properties": {
-        "email": {
-          "type": "string"
-        },
-        "createdAt": {
-          "type": "string",
-          "format": "date-time"
-        }
-      },
-      "required": ["email", "createdAt"]
-    },
-    "Profile": {
-      "title": "Profile",
-      "type": "object",
-      "properties": {
+        "email": { "type": "string" },
+        "displayName": { "type": "string" },
+        "role": { "type": "string" },
         "edad": { "type": "number" },
         "genero": { "type": "string" },
         "peso": { "type": "number" },
@@ -26,48 +15,163 @@
         "asma": { "type": "boolean" },
         "ansiedad": { "type": "boolean" },
         "arritmia": { "type": "boolean" },
-        "reposoMin": { "type": "number" },
-        "reposoMax": { "type": "number" }
-      }
+        "hipertension": { "type": "boolean" },
+        "epoc": { "type": "boolean" },
+        "alergias": { "type": "boolean" },
+        "bpmReposo": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["email", "createdAt"]
     },
-    "HistoryEvent": {
-      "title": "HistoryEvent",
+    "Device": {
+      "title": "Device",
+      "description": "Connected biometric devices (watches, oximeters)",
       "type": "object",
       "properties": {
         "id": { "type": "string" },
+        "name": { "type": "string" },
         "type": { "type": "string" },
+        "status": { "type": "string" },
+        "battery": { "type": "number" },
+        "lastSync": { "type": "string", "format": "date-time" },
+        "detailMessage": { "type": "string" }
+      },
+      "required": ["id", "name", "type", "status"]
+    },
+    "Vital": {
+      "title": "Vital",
+      "description": "Time-series biometric measurements",
+      "type": "object",
+      "properties": {
+        "timestamp": { "type": "string", "format": "date-time" },
+        "bpm": { "type": "number" },
+        "spo2": { "type": "number" },
+        "hrv": { "type": "number" },
+        "status": { "type": "string" },
+        "sourceDevice": { "type": "string" }
+      },
+      "required": ["timestamp"]
+    },
+    "Alert": {
+      "title": "Alert",
+      "description": "System generated alerts based on vital anomalies",
+      "type": "object",
+      "properties": {
+        "timestamp": { "type": "string", "format": "date-time" },
+        "level": { "type": "string", "description": "low, moderate, high, critical" },
+        "reason": { "type": "string" },
+        "status": { "type": "string", "description": "active, resolved, false_alarm" },
+        "resolvedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["timestamp", "level", "reason", "status"]
+    },
+    "EmergencyContact": {
+      "title": "EmergencyContact",
+      "description": "User's designated emergency contacts",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "phone": { "type": "string" },
+        "countryCode": { "type": "string" },
+        "relation": { "type": "string" },
+        "order": { "type": "number" }
+      },
+      "required": ["name", "phone"]
+    },
+    "Session": {
+      "title": "Session",
+      "description": "Guided breathing or therapeutic sessions",
+      "type": "object",
+      "properties": {
+        "startTime": { "type": "string", "format": "date-time" },
+        "endTime": { "type": "string", "format": "date-time" },
+        "type": { "type": "string" },
+        "durationSeconds": { "type": "number" },
+        "completed": { "type": "boolean" },
+        "effectivenessRating": { "type": "number" }
+      },
+      "required": ["startTime", "type", "durationSeconds"]
+    },
+    "PanicEvent": {
+      "title": "PanicEvent",
+      "description": "Self-reported or system-detected panic attacks",
+      "type": "object",
+      "properties": {
+        "timestamp": { "type": "string", "format": "date-time" },
+        "durationSeconds": { "type": "number" },
+        "triggers": { "type": "array", "items": { "type": "string" } },
+        "symptoms": { "type": "array", "items": { "type": "string" } },
+        "severity": { "type": "number" },
+        "userNotes": { "type": "string" },
+        "resolvedWith": { "type": "string" }
+      },
+      "required": ["timestamp", "severity"]
+    },
+    "Location": {
+      "title": "Location",
+      "description": "Geographical locations recorded during critical alerts (SOS)",
+      "type": "object",
+      "properties": {
+        "timestamp": { "type": "string", "format": "date-time" },
+        "latitude": { "type": "number" },
+        "longitude": { "type": "number" },
+        "accuracy": { "type": "number" },
+        "triggerEvent": { "type": "string" }
+      },
+      "required": ["timestamp", "latitude", "longitude"]
+    },
+    "Notification": {
+      "title": "Notification",
+      "description": "In-app notifications sent to the user",
+      "type": "object",
+      "properties": {
+        "timestamp": { "type": "string", "format": "date-time" },
         "title": { "type": "string" },
-        "time": { "type": "string" },
-        "description": { "type": "string" },
-        "date": { "type": "string" },
-        "details": {
-          "type": "object",
-          "properties": {
-            "peakBpm": { "type": "number" },
-            "status": { "type": "string" }
-          }
-        }
-      }
+        "body": { "type": "string" },
+        "type": { "type": "string" },
+        "read": { "type": "boolean" }
+      },
+      "required": ["timestamp", "title", "body", "read"]
     }
   },
   "firestore": {
     "users/{userId}": {
-      "schema": {
-        "$ref": "#/entities/User"
-      },
-      "description": "User account info"
+      "schema": { "$ref": "#/entities/User" },
+      "description": "User account and profile info"
     },
-    "users/{userId}/profile/{docId}": {
-      "schema": {
-        "$ref": "#/entities/Profile"
-      },
-      "description": "User health profile details"
+    "users/{userId}/devices/{deviceId}": {
+      "schema": { "$ref": "#/entities/Device" },
+      "description": "User's connected devices"
     },
-    "users/{userId}/history/{eventId}": {
-      "schema": {
-        "$ref": "#/entities/HistoryEvent"
-      },
-      "description": "User history events"
+    "users/{userId}/vitals/{vitalId}": {
+      "schema": { "$ref": "#/entities/Vital" },
+      "description": "User's biometric time-series data"
+    },
+    "users/{userId}/alerts/{alertId}": {
+      "schema": { "$ref": "#/entities/Alert" },
+      "description": "System alerts triggered for the user"
+    },
+    "users/{userId}/emergency_contacts/{contactId}": {
+      "schema": { "$ref": "#/entities/EmergencyContact" },
+      "description": "User's emergency contacts"
+    },
+    "users/{userId}/sessions/{sessionId}": {
+      "schema": { "$ref": "#/entities/Session" },
+      "description": "Guided breathing or therapeutic sessions"
+    },
+    "users/{userId}/panic_events/{eventId}": {
+      "schema": { "$ref": "#/entities/PanicEvent" },
+      "description": "Logged panic or anxiety events"
+    },
+    "users/{userId}/locations/{locationId}": {
+      "schema": { "$ref": "#/entities/Location" },
+      "description": "Location tracking during SOS/critical alerts"
+    },
+    "users/{userId}/notifications/{notificationId}": {
+      "schema": { "$ref": "#/entities/Notification" },
+      "description": "In-app notifications for the user"
     }
   }
 }
