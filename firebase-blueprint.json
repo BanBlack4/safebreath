@@ -1,0 +1,73 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile information",
+      "type": "object",
+      "properties": {
+        "email": {
+          "type": "string"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["email", "createdAt"]
+    },
+    "Profile": {
+      "title": "Profile",
+      "type": "object",
+      "properties": {
+        "edad": { "type": "number" },
+        "genero": { "type": "string" },
+        "peso": { "type": "number" },
+        "altura": { "type": "number" },
+        "asma": { "type": "boolean" },
+        "ansiedad": { "type": "boolean" },
+        "arritmia": { "type": "boolean" },
+        "reposoMin": { "type": "number" },
+        "reposoMax": { "type": "number" }
+      }
+    },
+    "HistoryEvent": {
+      "title": "HistoryEvent",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "type": { "type": "string" },
+        "title": { "type": "string" },
+        "time": { "type": "string" },
+        "description": { "type": "string" },
+        "date": { "type": "string" },
+        "details": {
+          "type": "object",
+          "properties": {
+            "peakBpm": { "type": "number" },
+            "status": { "type": "string" }
+          }
+        }
+      }
+    }
+  },
+  "firestore": {
+    "users/{userId}": {
+      "schema": {
+        "$ref": "#/entities/User"
+      },
+      "description": "User account info"
+    },
+    "users/{userId}/profile/{docId}": {
+      "schema": {
+        "$ref": "#/entities/Profile"
+      },
+      "description": "User health profile details"
+    },
+    "users/{userId}/history/{eventId}": {
+      "schema": {
+        "$ref": "#/entities/HistoryEvent"
+      },
+      "description": "User history events"
+    }
+  }
+}

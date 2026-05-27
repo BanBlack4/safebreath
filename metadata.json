@@ -1,0 +1,6 @@
+{
+  "name": "SafeBreath",
+  "description": "Un ecosistema terapéutico para el monitoreo preventivo de la salud, análisis de la respiración y manejo de crisis respiratorias y de ansiedad.",
+  "requestFramePermissions": ["bluetooth"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
