@@ -8,11 +8,25 @@ import { DomainEvents, TelemetryValidatedPayload } from '../events/domain-events
 import { ZodError } from 'zod';
 import { logger } from '../observability/logger';
 import { metrics } from '../observability/metrics';
+import { traceContextStorage } from '../observability/tracing';
+import { v4 as uuidv4 } from 'uuid';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'fallback-secret-for-dev';
 
 export function setupWebSocketServer(server: any) {
-  const wss = new WebSocketServer({ server });
+  // Use noServer manually to handle upgrade, allowing NestJS to coexist without path collisions
+  const wss = new WebSocketServer({ noServer: true });
+
+  server.on('upgrade', (request: any, socket: any, head: any) => {
+    const pathname = request.url ? new URL(request.url, `http://${request.headers.host}`).pathname : '/';
+    
+    if (pathname === '/') {
+      wss.handleUpgrade(request, socket, head, (ws) => {
+        wss.emit('connection', ws, request);
+      });
+    }
+    // Else: let other handlers (like NestJS Gateway) handle the upgrade
+  });
 
   // Stale connection cleanup loop
   const interval = setInterval(() => {
@@ -31,15 +45,19 @@ export function setupWebSocketServer(server: any) {
   });
 
   wss.on('connection', (ws: WebSocket, req: IncomingMessage) => {
-    metrics.incrementGauge('websocket_connections_active', 1);
+    // Generate correlation context for this connection
+    const traceId = req.headers['x-correlation-id'] as string || uuidv4();
     
-    // Setup heartbeat
-    (ws as any).isAlive = true;
-    ws.on('pong', () => {
+    traceContextStorage.run({ traceId }, () => {
+      metrics.incrementGauge('websocket_connections_active', 1);
+      
+      // Setup heartbeat
       (ws as any).isAlive = true;
-    });
+      ws.on('pong', () => {
+        (ws as any).isAlive = true;
+      });
 
-    console.log('[WS] Client attempting connection');
+      console.log('[WS] Client attempting connection');
 
     // 1. WebSocket Authentication
     const url = new URL(req.url || '', `http://${req.headers.host}`);
@@ -79,7 +97,7 @@ export function setupWebSocketServer(server: any) {
       } catch (err) {
         if (err instanceof ZodError) {
           // Reject malformed schemas without killing the connection immediately (or optionally close it)
-          console.warn(`[WS] Malformed packet from ${userId}`, err.errors);
+          console.warn(`[WS] Malformed packet from ${userId}`, (err as ZodError<any>).issues);
           ws.send(JSON.stringify({ type: 'ERROR', message: 'Malformed telemetry packet' }));
         } else {
           console.error(`[WS] Message processing error`, err);
@@ -104,5 +122,6 @@ export function setupWebSocketServer(server: any) {
     };
     
     eventBus.subscribe<TelemetryValidatedPayload>(DomainEvents.TelemetryValidated, clientProcessedListener);
+    }); // Close traceContextStorage.run
   });
 }

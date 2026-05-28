@@ -1,3 +1,11 @@
+import { setupTracing } from './server/observability/tracing';
+setupTracing();
+
+import { NestFactory } from '@nestjs/core';
+import { ExpressAdapter } from '@nestjs/platform-express';
+import { WsAdapter } from '@nestjs/platform-ws';
+import { AppModule } from './server/nest-scaffold/app.module';
+
 import express from "express";
 import path from "path";
 import { createServer as createViteServer } from "vite";
@@ -49,7 +57,7 @@ async function startServer() {
   } else {
     const distPath = path.join(process.cwd(), 'dist');
     app.use(express.static(distPath));
-    app.get('*', (req, res) => {
+    app.get('*all', (req, res) => {
       res.sendFile(path.join(distPath, 'index.html'));
     });
   }
@@ -60,9 +68,15 @@ async function startServer() {
   // Initialize Internal Event Consumers
   registerEventConsumers();
 
+  console.log('Bootstrapping Hybrid NestJS Runtime...');
+  const nestApp = await NestFactory.create(AppModule, new ExpressAdapter(app));
+  nestApp.useWebSocketAdapter(new WsAdapter(nestApp));
+  nestApp.enableShutdownHooks();
+  await nestApp.init();
+
   // Create HTTP server attached to express app
   const server = app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Node-Express server running on http://localhost:${PORT}`);
+    console.log(`Node-Express-NestJS Hybrid Server running on http://localhost:${PORT}`);
   });
 
   // Attach WebSocket server for real-time telemetry Pipeline
@@ -70,11 +84,14 @@ async function startServer() {
   setupWebSocketServer(server);
 
   // Graceful Shutdown for Kubernetes (SIGTERM)
-  process.on('SIGTERM', () => {
+  process.on('SIGTERM', async () => {
     console.log('[Orchestrator] SIGTERM received. Initiating graceful shutdown...');
-    // Stop accepting new connections
+    // Stop NestJS Modules
+    await nestApp.close();
+    
+    // Stop accepting new connections on raw Express/ws layer
     server.close(() => {
-      console.log('[Orchestrator] HTTP server closed.');
+      console.log('[Orchestrator] Legacy HTTP server closed.');
       // Exit cleanly after buffers flush and connections close
       process.exit(0);
     });

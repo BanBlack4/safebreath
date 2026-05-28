@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { EventEmitterModule } from '@nestjs/event-emitter';
 import { CoreModule } from './core/core.module';
 import { TelemetryModule } from './telemetry/telemetry.module';
 
@@ -11,6 +12,11 @@ import { TelemetryModule } from './telemetry/telemetry.module';
  */
 @Module({
   imports: [
+    EventEmitterModule.forRoot({
+      global: true,
+      wildcard: true, // Allow wildcard event subscriptions
+      maxListeners: 10,
+    }),
     CoreModule,
     TelemetryModule,
     // ObservabilityModule,

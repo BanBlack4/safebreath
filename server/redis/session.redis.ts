@@ -1,7 +1,7 @@
 import { redisWrapper } from './client';
 import { RedisKeys } from './schema';
 import { logger } from '../observability/logger';
-import { os } from 'os';
+import * as os from 'os';
 
 /**
  * Distributed Session Coordination (Redis)

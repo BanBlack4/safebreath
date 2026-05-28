@@ -37,8 +37,13 @@ class AppEventBus {
     this.currentInFlightEvents++;
     metrics.setGauge('event_bus_queue_depth', this.currentInFlightEvents);
 
+    // Capture the existing context before jumping event loop queue
+    const traceCtx = require('../observability/tracing').traceContextStorage.getStore();
+
     setImmediate(() => {
-      this.emitter.emit(eventName, payload);
+      require('../observability/tracing').traceContextStorage.run(traceCtx || {}, () => {
+        this.emitter.emit(eventName, payload);
+      });
     });
   }
 
@@ -60,6 +65,10 @@ class AppEventBus {
     });
 
     logger.info(`Consumer subscribed to ${eventName}`, { event: 'EVENT_BUS_SUBSCRIBE' });
+  }
+
+  public unsubscribe(eventName: DomainEvents | string, handler: (...args: any[]) => void): void {
+    this.emitter.off(eventName, handler);
   }
 
   private handleDeadLetter(eventName: string, payload: any, error: any) {

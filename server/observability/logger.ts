@@ -1,3 +1,5 @@
+import { traceContextStorage } from './tracing';
+
 /**
  * Structured Logging Facade
  * 
@@ -7,10 +9,14 @@
  */
 export class Logger {
   private formatMessage(level: string, message: string, meta?: any) {
+    const traceCtx = traceContextStorage.getStore();
+    
     const logObj = {
       timestamp: new Date().toISOString(),
       level,
       message,
+      traceId: traceCtx?.traceId,
+      userId: traceCtx?.userId,
       ...meta
     };
     

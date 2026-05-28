@@ -236,8 +236,8 @@ export default function HistoryScreen({ profile, onEventSelect, onScreenChange }
                 contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)', backgroundColor: 'rgba(255, 255, 255, 0.95)' }}
                 itemStyle={{ color: '#00796b', fontWeight: 'bold' }}
               />
-              <ReferenceArea y1={50} y2={profile.bpmReposo ? profile.bpmReposo + 30 : 100} fill="#00796b" fillOpacity={0.05} />
-              <ReferenceArea y1={profile.bpmReposo ? profile.bpmReposo + 30 : 100} fill="#ef4444" fillOpacity={0.05} />
+              <ReferenceArea y1={50} y2={profile.bpmReposo ? profile.bpmReposo + 30 : 100} />
+              <ReferenceArea y1={profile.bpmReposo ? profile.bpmReposo + 30 : 100} />
               <ReferenceLine y={profile.bpmReposo || 70} stroke="#00796b" strokeDasharray="3 3" label={{ position: 'insideTopLeft', value: 'Baseline Personal', fill: '#00796b', fontSize: 10, fontWeight: 'bold' }} />
               <Line type="monotone" dataKey="bpm" stroke="#00796b" strokeWidth={3} dot={{ r: 4, fill: '#fff', strokeWidth: 2, stroke: '#00796b' }} activeDot={{ r: 6, fill: '#00796b', stroke: '#fff' }} />
             </LineChart>
