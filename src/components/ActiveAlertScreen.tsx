@@ -62,13 +62,6 @@ export default function ActiveAlertScreen({
     }
   }, 20); // 20 magnitude implies a strong jog/shake
 
-  useEffect(() => {
-    // Attempt to request devicemotion permission if on iOS 13+
-    if (showShakeDialog && typeof (DeviceMotionEvent as any)?.requestPermission === 'function') {
-      (DeviceMotionEvent as any).requestPermission().catch(console.warn);
-    }
-  }, [showShakeDialog]);
-
   // Navigation tabs for options
   const [activeTab, setActiveTab] = useState<ActiveTab>('ai-support');
 
@@ -136,28 +129,60 @@ export default function ActiveAlertScreen({
     return () => clearInterval(timer);
   }, [triggered, showSurvey]);
 
-  // Dispatch automated Firebase FCM SOS when triggered
+  // Escalation Workflow: Detection -> Confirmation (passed) -> Escalation
   useEffect(() => {
     if (triggered) {
-      fetch('/api/firebase/sos', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          contacts: finalContacts,
-          message: `🚑 *ALERTA MÉDICA AUTOMÁTICA* 🚑\n\nEl paciente está reportando parámetros vitales críticos (Pulso actual simulado: ${currentBpm} BPM). Por favor, intenta contactarlo inmediatamente o despacha ayuda médica a su última ubicación.`
-        })
-      })
-      .then(res => res.json())
-      .then(data => {
-        if (data.error) {
-          console.warn("Firebase SOS Warning:", data.error);
-        } else {
-          console.log("Firebase SOS dispatch success:", data);
-        }
-      })
-      .catch(err => console.error("Firebase SOS dispatch failed:", err));
+      // 1. Attemp GPS Location Selection
+      let locationObj: { lat: number, lng: number } | null = null;
+      
+      const dispatchAlerts = (loc: { lat: number, lng: number } | null) => {
+        const mapsLink = loc ? `https://maps.google.com/?q=${loc.lat},${loc.lng}` : 'Ubicación no disponible';
+        const messageText = `🚑 *ALERTA MÉDICA AUTOMÁTICA* 🚑\n\nEl paciente está reportando parámetros vitales críticos (Pulso actual simulado: ${currentBpm} BPM).\nUbicación GPS: ${mapsLink}\nPor favor, intenta contactarlo inmediatamente o despacha ayuda médica a esta ubicación.`;
+        
+        // 2. Dispatch SMS / Global Alerts (SOS)
+        fetch('/api/firebase/sos', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            contacts: finalContacts,
+            message: messageText
+          })
+        }).catch(err => console.error("Firebase SOS dispatch failed:", err));
+
+        // 3. Dispatch Push / Critical Alerts (Android/iOS)
+        // Attempting to dispatch to registered contacts if they have registered FCM tokens.
+        // We'll simulate by passing generic / mocked targetTokens since we don't have real devices linked in this demo.
+        fetch('/api/firebase/send-critical-alert', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+             targetTokens: ["SIMULATED_TARGET_DEVICE_TOKEN_123"],
+             patientName: userProfile?.name || "Paciente de SafeBreath",
+             alertMessage: messageText,
+             location: loc
+          })
+        }).catch(err => console.error("Critical FCM alert dispatch failed:", err));
+        
+        console.log("Escalation Sequence Complete - Alerts Fired.");
+      };
+
+      if ('geolocation' in navigator) {
+        navigator.geolocation.getCurrentPosition(
+          (pos) => {
+            locationObj = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+            dispatchAlerts(locationObj);
+          },
+          (err) => {
+            console.warn("GPS failed or denied during escalation:", err);
+            dispatchAlerts(null);
+          },
+          { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
+        );
+      } else {
+        dispatchAlerts(null);
+      }
     }
-  }, [triggered, currentBpm, finalContacts]);
+  }, [triggered]);
 
   // Integrated Rescue Breath Pacing Loop (4s Inhale, 4s Exhale)
   useEffect(() => {

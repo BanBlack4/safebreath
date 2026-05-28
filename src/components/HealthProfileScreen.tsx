@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { Save, AlertCircle, Sparkles, CheckCircle2, LogOut, Database, Phone, Plus, Trash2 } from 'lucide-react';
 import { isValidPhoneNumber } from 'libphonenumber-js';
@@ -18,6 +18,7 @@ interface HealthProfileScreenProps {
 }
 
 export default function HealthProfileScreen({ profile, onSaveProfile, onSignOut, onNavigateToAdmin }: HealthProfileScreenProps) {
+  const [name, setName] = useState(profile.name || '');
   const [edad, setEdad] = useState<number | string>(profile.edad || '');
   const [genero, setGenero] = useState(profile.genero);
   const [peso, setPeso] = useState<number | string>(profile.peso || '');
@@ -34,6 +35,10 @@ export default function HealthProfileScreen({ profile, onSaveProfile, onSignOut,
   const [emergencyContacts, setEmergencyContacts] = useState(profile.emergencyContacts || []);
   const [toastMsg, setToastMsg] = useState<string | null>(null);
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    validate();
+  }, [edad, peso, altura, bpmReposo, emergencyContacts]);
 
   const validate = (): boolean => {
     const errs: Record<string, string> = {};
@@ -116,6 +121,8 @@ export default function HealthProfileScreen({ profile, onSaveProfile, onSignOut,
     }
 
     onSaveProfile({
+      ...profile,
+      name,
       edad: Number(edad),
       genero,
       peso: Number(peso),
@@ -160,7 +167,7 @@ export default function HealthProfileScreen({ profile, onSaveProfile, onSignOut,
         <div className="flex justify-between items-start">
           <div>
             <h2 className="text-2xl font-bold text-[#071e27] dark:text-white">
-              {auth.currentUser?.displayName ? `Perfil de ${auth.currentUser.displayName.split(' ')[0]}` : 'Perfil de Salud'}
+              {profile.name ? `Perfil de ${profile.name}` : (auth.currentUser?.displayName ? `Perfil de ${auth.currentUser.displayName.split(' ')[0]}` : 'Perfil de Salud')}
             </h2>
             <p className="text-sm text-gray-500 dark:text-gray-400">
               Personaliza tu experiencia para una detección más precisa.
@@ -170,6 +177,20 @@ export default function HealthProfileScreen({ profile, onSaveProfile, onSignOut,
              <LogOut className="w-4 h-4" />
              Salir
           </button>
+        </div>
+      </section>
+
+      {/* Name Input Card */}
+      <section className="bg-white dark:bg-[#0a232f] rounded-2xl p-4 shadow-sm border border-gray-100 dark:border-[#133240] transition duration-150 space-y-1">
+        <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider block">Nombre o Apodo</label>
+        <div className="flex items-center border-b border-gray-150 dark:border-[#133240] focus-within:border-[#00796b] pb-1 transition duration-150">
+          <input
+            type="text"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            className="bg-transparent w-full text-lg font-bold text-gray-800 dark:text-white focus:outline-none border-none p-0 focus:ring-0"
+            placeholder="Introduce tu nombre"
+          />
         </div>
       </section>
 
@@ -446,7 +467,12 @@ export default function HealthProfileScreen({ profile, onSaveProfile, onSignOut,
       <section className="pt-2">
         <button
           onClick={handleSave}
-          className="w-full bg-[#00796b] hover:bg-[#005e53] text-white font-bold py-4 rounded-2xl shadow-md active:scale-95 transition flex justify-center items-center gap-2 cursor-pointer"
+          disabled={Object.keys(validationErrors).length > 0}
+          className={`w-full font-bold py-4 rounded-2xl shadow-md transition flex justify-center items-center gap-2 ${
+            Object.keys(validationErrors).length > 0
+              ? 'bg-gray-400 text-gray-200 cursor-not-allowed'
+              : 'bg-[#00796b] hover:bg-[#005e53] text-white active:scale-95 cursor-pointer'
+          }`}
         >
           <Save className="w-5 h-5" />
           <span>Guardar Cambios</span>

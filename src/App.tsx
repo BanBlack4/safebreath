@@ -16,8 +16,9 @@ import ActiveAlertScreen from './components/ActiveAlertScreen';
 import ConnectDevicesScreen from './components/ConnectDevicesScreen';
 import OnboardingScreen from './components/OnboardingScreen';
 import WelcomeTutorial from './components/WelcomeTutorial';
+import InitialProfileSetupModal from './components/InitialProfileSetupModal';
 import ErrorBoundary from './components/ErrorBoundary';
-import { AppScreen, UserProfile, ConnectedDevice } from './types';
+import { AppScreen, UserProfile, ConnectedDevice, UserRole } from './types';
 import { motion, AnimatePresence } from 'motion/react';
 import { Heart, Activity, CheckCircle, Smartphone } from 'lucide-react';
 import { onAuthStateChanged, User, signOut } from 'firebase/auth';
@@ -113,6 +114,7 @@ export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [isAuthLoading, setIsAuthLoading] = useState(true);
   const [showTutorial, setShowTutorial] = useState(false);
+  const [showProfileSetup, setShowProfileSetup] = useState(false);
 
   // Manual theme override. 'system', 'light', 'dark'
   const [themeMode, setThemeMode] = useState<'system'|'light'|'dark'>(() => {
@@ -158,7 +160,7 @@ export default function App() {
     return DEFAULT_PROFILE;
   });
 
-  const [isAdmin, setIsAdmin] = useState(false);
+  const [userRole, setUserRole] = useState<UserRole>('user');
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
@@ -173,10 +175,10 @@ export default function App() {
           if (!userDoc.exists()) {
             await setDoc(userRef, { email: currentUser.email, createdAt: new Date().toISOString(), role: 'user' });
             setShowTutorial(true);
-            setIsAdmin(false);
+            setUserRole('user');
           } else {
             const data = userDoc.data();
-            setIsAdmin(data?.role === 'admin');
+            setUserRole((data?.role as UserRole) || 'user');
             
             // Sync initial devices if available
             if (data?.devices && Array.isArray(data.devices)) {
@@ -246,6 +248,17 @@ export default function App() {
     signOut(auth);
   };
 
+  const triggerAlertScreenWithPermission = async () => {
+    if (typeof (DeviceMotionEvent as any)?.requestPermission === 'function') {
+      try {
+        await (DeviceMotionEvent as any).requestPermission();
+      } catch (e) {
+        console.warn("DeviceMotion request error or denied:", e);
+      }
+    }
+    setCurrentScreen('active-alert');
+  };
+
   if (isAuthLoading) {
     return (
       <div className="min-h-screen bg-[#f3faff] dark:bg-[#05141a] flex items-center justify-center max-w-md mx-auto relative shadow-2xl border-x border-[#cfe6f2] dark:border-[#0f3443]">
@@ -307,7 +320,7 @@ export default function App() {
             >
               <DashboardScreen
                 onStartCheckin={handleStartCheckin}
-                triggerAlertScreen={() => setCurrentScreen('active-alert')}
+                triggerAlertScreen={triggerAlertScreenWithPermission}
                 onScreenChange={(scr) => {
                   if (scr === 'event-detail') setCurrentScreen('event-detail');
                   else setCurrentScreen(scr as AppScreen);
@@ -325,11 +338,12 @@ export default function App() {
               transition={{ duration: 0.2 }}
             >
               <VitalsScreen
+                profile={profile}
                 onScreenChange={(scr) => {
                   if (scr === 'event-detail') setCurrentScreen('event-detail');
                   else setCurrentScreen(scr as AppScreen);
                 }}
-                triggerAlertScreen={() => setCurrentScreen('active-alert')}
+                triggerAlertScreen={triggerAlertScreenWithPermission}
               />
             </motion.div>
           )}
@@ -346,7 +360,7 @@ export default function App() {
                 profile={profile}
                 onSaveProfile={handleSaveProfile}
                 onSignOut={handleSignOut}
-                onNavigateToAdmin={isAdmin ? () => setCurrentScreen('admin-dashboard') : undefined}
+                onNavigateToAdmin={userRole === 'admin' ? () => setCurrentScreen('admin-dashboard') : undefined}
               />
             </motion.div>
           )}
@@ -372,6 +386,7 @@ export default function App() {
               transition={{ duration: 0.2 }}
             >
               <HistoryScreen
+                profile={profile}
                 onEventSelect={handleEventDetailSelect}
                 onScreenChange={setCurrentScreen}
               />
@@ -438,13 +453,32 @@ export default function App() {
         <BottomNav
           currentScreen={currentScreen}
           onScreenChange={setCurrentScreen}
-          triggerAlertScreen={() => setCurrentScreen('active-alert')}
+          triggerAlertScreen={triggerAlertScreenWithPermission}
         />
       )}
 
       {/* Welcome Tutorial Overlay */}
-      {showTutorial && <WelcomeTutorial onComplete={() => setShowTutorial(false)} />}
+      {showTutorial && (
+        <WelcomeTutorial 
+          onComplete={() => {
+            setShowTutorial(false);
+            setShowProfileSetup(true);
+          }} 
+        />
+      )}
       
+      {/* Initial Profile Setup Overlay */}
+      {showProfileSetup && user && (
+        <InitialProfileSetupModal
+          initialEmail={user.email || ''}
+          currentProfile={profile}
+          onSave={(updatedProfile) => {
+            handleSaveProfile(updatedProfile);
+            setShowProfileSetup(false);
+          }}
+        />
+      )}
+
       {/* System Notifications */}
       <Toaster position="top-center" toastOptions={{ className: 'dark:bg-[#0a232f] dark:text-white', style: { borderRadius: '16px', fontWeight: 'calc(bold)' } }} />
     </div>

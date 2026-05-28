@@ -5,21 +5,31 @@
 
 import { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
-import { Heart, Activity, ShieldAlert, Cpu, Award, RefreshCw, Calendar, Settings, ArrowRight } from 'lucide-react';
+import { Heart, Activity, ShieldAlert, Cpu, Award, RefreshCw, Calendar, Settings, ArrowRight, Wifi, WifiOff } from 'lucide-react';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, ReferenceLine } from 'recharts';
 import BreathingModal from './BreathingModal';
-import { AppScreen } from '../types';
+import { AppScreen, UserProfile } from '../types';
+import { useTelemetry } from '../hooks/useTelemetry';
 
 interface VitalsScreenProps {
+  profile: UserProfile;
   onScreenChange: (screen: AppScreen) => void;
   triggerAlertScreen: () => void;
 }
 
-export default function VitalsScreen({ onScreenChange, triggerAlertScreen }: VitalsScreenProps) {
+export default function VitalsScreen({ profile, onScreenChange, triggerAlertScreen }: VitalsScreenProps) {
+  const { liveBpm: wsLiveBpm, isConnected } = useTelemetry();
   const [liveBpm, setLiveBpm] = useState(73);
   const [showBreathingModal, setShowBreathingModal] = useState(false);
 
-  // Simulate real-time heart rate fluctuations to make the application feel alive!
+  // Fallback simulation if WS is not providing data, plus real WS data merge
   useEffect(() => {
+    if (wsLiveBpm !== null) {
+      setLiveBpm(wsLiveBpm);
+      return;
+    }
+    
+    // Simulation fallback
     const interval = setInterval(() => {
       setLiveBpm(prev => {
         const delta = Math.floor(Math.random() * 3) - 1; // -1, 0, or 1
@@ -28,7 +38,7 @@ export default function VitalsScreen({ onScreenChange, triggerAlertScreen }: Vit
     }, 3000);
 
     return () => clearInterval(interval);
-  }, []);
+  }, [wsLiveBpm]);
 
   // Event details dummy list
   const heartTrends = [
@@ -75,9 +85,12 @@ export default function VitalsScreen({ onScreenChange, triggerAlertScreen }: Vit
             <span className="text-xs font-semibold text-gray-500 uppercase tracking-widest mt-1">BPM</span>
           </div>
 
-          <div className="inline-flex items-center gap-2 bg-[#00796b]/10 px-4 py-1.5 rounded-full border border-[#00796b]/20">
-            <span className="w-2.5 h-2.5 bg-[#00796b] rounded-full animate-ping" />
-            <span className="text-xs font-bold text-[#00796b]">Monitoreo: Normal</span>
+          <div className={`inline-flex items-center gap-2 px-4 py-1.5 rounded-full border ${isConnected ? 'bg-[#00796b]/10 border-[#00796b]/20' : 'bg-red-500/10 border-red-500/20'}`}>
+            <span className={`w-2.5 h-2.5 rounded-full ${isConnected ? 'bg-[#00796b] animate-ping' : 'bg-red-500 animate-pulse'}`} />
+            <span className={`text-xs font-bold ${isConnected ? 'text-[#00796b]' : 'text-red-500'}`}>
+              {isConnected ? 'Monitoreo: En vivo (WS)' : 'Monitoreo: Offline'}
+            </span>
+            {isConnected ? <Wifi className="w-3 h-3 text-[#00796b]" /> : <WifiOff className="w-3 h-3 text-red-500" />}
           </div>
         </div>
       </section>
@@ -118,31 +131,28 @@ export default function VitalsScreen({ onScreenChange, triggerAlertScreen }: Vit
           <RefreshCw className="w-4.5 h-4.5 text-gray-400 hover:text-[#005e53] dark:hover:text-[#a4f0e9] cursor-pointer" />
         </div>
 
-        {/* Handcrafted precise responsive telemetry bar chart */}
-        <div className="pt-2">
-          <div className="h-32 w-full flex items-end justify-between gap-2.5 px-2">
-            {heartTrends.map((t, idx) => {
-              // Map BPM values dynamically to heights
-              const heightPercent = `${Math.min(100, (t.bpm / 150) * 100)}%`;
-              return (
-                <div key={idx} className="flex-1 flex flex-col items-center gap-2 group">
-                  <div className="w-full relative flex items-end justify-center h-24 bg-gray-50/50 dark:bg-[#133240] rounded-lg overflow-hidden">
-                    <motion.div
-                      initial={{ height: 0 }}
-                      animate={{ height: heightPercent }}
-                      transition={{ duration: 0.8, delay: idx * 0.05 }}
-                      className={`w-full rounded-t-lg ${
-                        t.isPeak ? 'bg-red-500' : 'bg-[#00796b]/40 dark:bg-[#00796b]/60 group-hover:bg-[#00796b]'
-                      }`}
-                    />
-                    <span className="absolute bottom-1 text-[9px] font-bold text-gray-700 dark:text-gray-200">{t.bpm}</span>
-                  </div>
-                  <span className="text-[9px] font-bold text-gray-500 dark:text-gray-400 uppercase">{t.hour}</span>
-                </div>
-              );
-            })}
-          </div>
-          <p className="text-center text-xs text-gray-500 dark:text-gray-300 font-bold mt-4 bg-teal-50/50 dark:bg-[#0c2a38] py-1.5 rounded-lg border border-teal-100/30 dark:border-[#133240]">
+        {/* Recharts Bar chart for telemetry */}
+        <div className="pt-4 h-48 w-full">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={heartTrends} margin={{ top: 10, right: 0, left: -20, bottom: 0 }}>
+              <XAxis dataKey="hour" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#9ca3af' }} dy={10} />
+              <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#9ca3af' }} />
+              <Tooltip 
+                cursor={{ fill: 'transparent' }}
+                contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)', backgroundColor: 'rgba(255, 255, 255, 0.95)' }}
+                itemStyle={{ fontWeight: 'bold' }}
+              />
+              <ReferenceLine y={profile.bpmReposo || 70} stroke="#00796b" strokeDasharray="3 3" label={{ position: 'top', value: 'Reposo', fill: '#00796b', fontSize: 10, fontWeight: 'bold' }} />
+              <Bar dataKey="bpm" radius={[6, 6, 0, 0]}>
+                {heartTrends.map((entry, index) => (
+                  <Cell key={`cell-${index}`} fill={entry.isPeak ? '#ef4444' : '#00796b'} fillOpacity={entry.isPeak ? 1 : 0.6} />
+                ))}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+        <div>
+          <p className="text-center text-xs text-gray-500 dark:text-gray-300 font-bold mt-2 bg-teal-50/50 dark:bg-[#0c2a38] py-1.5 rounded-lg border border-teal-100/30 dark:border-[#133240]">
             Promedio: 68 BPM sobre el reposo normal
           </p>
         </div>

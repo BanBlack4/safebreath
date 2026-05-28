@@ -6,17 +6,18 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { FileText, Calendar, Plus, ChevronRight, Activity, Smile, Settings, AlertTriangle, ShieldCheck, Clock, CheckCircle2 } from 'lucide-react';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { HealthEvent } from '../types';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine, ReferenceArea } from 'recharts';
+import { UserProfile, HealthEvent } from '../types';
 import { getHistoryEventsFromFirestore } from '../services/firestore';
 import { toast } from 'react-hot-toast';
 
 interface HistoryScreenProps {
+  profile: UserProfile;
   onEventSelect: (time: string, bpm: number) => void;
   onScreenChange: (screen: 'dashboard' | 'vitals' | 'profile' | 'history' | 'event-detail') => void;
 }
 
-export default function HistoryScreen({ onEventSelect, onScreenChange }: HistoryScreenProps) {
+export default function HistoryScreen({ profile, onEventSelect, onScreenChange }: HistoryScreenProps) {
   const [activeFilter, setActiveFilter] = useState<'Todos' | 'Alertas' | 'Vitals' | 'Manual Check-ins'>('Todos');
   const [selectedDateFilter, setSelectedDateFilter] = useState<string>('Todos');
   const [showAddLogModal, setShowAddLogModal] = useState(false);
@@ -230,11 +231,14 @@ export default function HistoryScreen({ onEventSelect, onScreenChange }: History
             <LineChart data={chartData} margin={{ top: 5, right: 10, left: -20, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" opacity={0.5} />
               <XAxis dataKey="time" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#9ca3af' }} dy={10} />
-              <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#9ca3af' }} />
+              <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#9ca3af' }} domain={['dataMin - 10', 'dataMax + 10']} />
               <Tooltip 
                 contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)', backgroundColor: 'rgba(255, 255, 255, 0.95)' }}
                 itemStyle={{ color: '#00796b', fontWeight: 'bold' }}
               />
+              <ReferenceArea y1={50} y2={profile.bpmReposo ? profile.bpmReposo + 30 : 100} fill="#00796b" fillOpacity={0.05} />
+              <ReferenceArea y1={profile.bpmReposo ? profile.bpmReposo + 30 : 100} fill="#ef4444" fillOpacity={0.05} />
+              <ReferenceLine y={profile.bpmReposo || 70} stroke="#00796b" strokeDasharray="3 3" label={{ position: 'insideTopLeft', value: 'Baseline Personal', fill: '#00796b', fontSize: 10, fontWeight: 'bold' }} />
               <Line type="monotone" dataKey="bpm" stroke="#00796b" strokeWidth={3} dot={{ r: 4, fill: '#fff', strokeWidth: 2, stroke: '#00796b' }} activeDot={{ r: 6, fill: '#00796b', stroke: '#fff' }} />
             </LineChart>
           </ResponsiveContainer>

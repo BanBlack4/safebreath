@@ -25,7 +25,11 @@ export interface EmergencyContact {
   relation: string;
 }
 
+export type UserRole = 'user' | 'family_member' | 'medical_staff' | 'admin';
+
 export interface UserProfile {
+  name?: string;
+  role?: UserRole;
   edad: number;
   genero: string;
   peso: number;

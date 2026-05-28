@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Heart, User, LogIn, Mail, Lock } from 'lucide-react';
-import { signInWithPopup, GoogleAuthProvider, createUserWithEmailAndPassword, signInWithEmailAndPassword } from 'firebase/auth';
+import { signInWithRedirect, getRedirectResult, GoogleAuthProvider, createUserWithEmailAndPassword, signInWithEmailAndPassword } from 'firebase/auth';
 import { auth } from '../firebase';
 import { toast } from 'react-hot-toast';
 
@@ -16,19 +16,34 @@ export default function OnboardingScreen({ onComplete }: OnboardingScreenProps) 
   const [password, setPassword] = useState('');
   const [isRegistering, setIsRegistering] = useState(false);
 
+  React.useEffect(() => {
+    const checkRedirect = async () => {
+      try {
+        const result = await getRedirectResult(auth);
+        if (result) {
+          toast.success('Sesión iniciada con Google');
+          onComplete();
+        }
+      } catch (err: any) {
+        console.error("Redirect auth error:", err);
+        setError(err.message || 'Error al iniciar sesión.');
+        toast.error('Error al iniciar sesión con Google');
+      }
+    };
+    checkRedirect();
+  }, [onComplete]);
+
   const handleGoogleLogin = async () => {
     setIsLoading(true);
     setError('');
     const provider = new GoogleAuthProvider();
+    // Use redirect to avoid popup blockers on mobile devices (e.g. auth/popup-closed-by-user on iOS)
     try {
-      await signInWithPopup(auth, provider);
-      toast.success('Sesión iniciada con Google');
-      onComplete();
+      await signInWithRedirect(auth, provider);
     } catch (err: any) {
       console.error(err);
       setError(err.message || 'Error al iniciar sesión.');
       toast.error('Error al iniciar sesión con Google');
-    } finally {
       setIsLoading(false);
     }
   };
@@ -54,7 +69,7 @@ export default function OnboardingScreen({ onComplete }: OnboardingScreenProps) 
     } catch (err: any) {
       console.error(err);
       let msg = 'Error en la autenticación.';
-      if (err.code === 'auth/email-already-in-use') msg = 'El correo ya está en uso.';
+      if (err.code === 'auth/email-already-in-use') msg = 'El correo ya está en uso. Si usaste Google anteriormente, inicia sesión con Google.';
       if (err.code === 'auth/wrong-password' || err.code === 'auth/user-not-found' || err.code === 'auth/invalid-credential') msg = 'Credenciales inválidas.';
       if (err.code === 'auth/weak-password') msg = 'La contraseña es muy débil (mín. 6 caracteres).';
       setError(msg);
