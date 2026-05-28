@@ -1,0 +1,76 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: safebreath-backend
+  namespace: safebreath-prod
+  labels:
+    app: safebreath-backend
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: safebreath-backend
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 25%
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app: safebreath-backend
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "3000"
+        prometheus.io/path: "/ops/metrics"
+    spec:
+      terminationGracePeriodSeconds: 60
+      containers:
+        - name: safebreath-node
+          image: gcr.io/safebreath/backend:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 3000
+              name: http
+          envFrom:
+            - secretRef:
+                name: safebreath-secrets
+            - configMapRef:
+                name: safebreath-config
+          env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+          # Operations Liveness
+          livenessProbe:
+            httpGet:
+              path: /ops/health
+              port: 3000
+            initialDelaySeconds: 15
+            periodSeconds: 20
+            timeoutSeconds: 3
+            failureThreshold: 3
+          # Operations Readiness
+          readinessProbe:
+            httpGet:
+              path: /ops/health
+              port: 3000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 2
+            successThreshold: 1
+            failureThreshold: 3
+          # Resource Bounds
+          resources:
+            requests:
+              cpu: 500m
+              memory: 512Mi
+            limits:
+              cpu: 1000m
+              memory: 1024Mi
+          # Graceful Shutdown
+          lifecycle:
+            preStop:
+              exec:
+                command: ["node", "-e", "console.log('Sending graceful termination signals...')"]
