@@ -1,5 +1,5 @@
 import { ITelemetryRepository } from '../interfaces/telemetry.repository.interface';
-import * as admin from 'firebase-admin';
+import admin from 'firebase-admin';
 
 export class FirestoreTelemetryRepository implements ITelemetryRepository {
   async saveTelemetry(userId: string, data: any): Promise<void> {

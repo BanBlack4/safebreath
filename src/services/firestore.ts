@@ -14,6 +14,39 @@ import { UserProfile } from '../types';
 const MAX_RETRIES = 5;
 const BASE_DELAY = 1000;
 
+// Offline profile queue
+let offlineProfileQueue: Partial<UserProfile> | null = null;
+let isReconciling = false;
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('online', () => {
+    if (offlineProfileQueue) {
+      reconcileOfflineProfileQueue();
+    }
+  });
+}
+
+const reconcileOfflineProfileQueue = async () => {
+  if (!auth.currentUser || !offlineProfileQueue || isReconciling) return;
+  
+  isReconciling = true;
+  try {
+    const uid = auth.currentUser.uid;
+    const profileRef = doc(db, 'users', uid, 'profile', 'data');
+    
+    const batch = writeBatch(db);
+    batch.set(profileRef, offlineProfileQueue, { merge: true });
+    
+    await batch.commit();
+    offlineProfileQueue = null; // Limpiar la cola tras sincronizar
+    console.log("Perfil offline reconciliado con éxito.");
+  } catch (error: any) {
+    console.warn("Error reconciliando perfil en offline queue:", error.message);
+  } finally {
+    isReconciling = false;
+  }
+};
+
 // Utilidad para reintento exponencial
 const withExponentialBackoff = async <T>(
   operation: () => Promise<T>,
@@ -36,16 +69,29 @@ const withExponentialBackoff = async <T>(
 export const syncProfileToFirestore = async (profile: UserProfile) => {
   if (!auth.currentUser) return;
   try {
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      // Encolamos localmente si estamos offline
+      offlineProfileQueue = { ...(offlineProfileQueue || {}), ...profile };
+      return;
+    }
+
     const uid = auth.currentUser.uid;
     const profileRef = doc(db, 'users', uid, 'profile', 'data');
     
     // Firestore queues writes automatically when offline, but we wrap it as requested.
     // We don't await it to avoid blocking the UI if offline.
     withExponentialBackoff(() => setDoc(profileRef, profile, { merge: true })).catch((err) => {
-      if (err.code !== 'unavailable') {
+      if (err.code === 'unavailable' || (typeof navigator !== 'undefined' && !navigator.onLine)) {
+        offlineProfileQueue = { ...(offlineProfileQueue || {}), ...profile };
+      } else {
         console.warn("Fallo en sincronización en segundo plano:", err.message);
       }
     });
+
+    // Si hay datos pendientes de cuando estuvimos offline, lanzamos la reconciliación
+    if (offlineProfileQueue) {
+      reconcileOfflineProfileQueue();
+    }
   } catch (error: any) {
     console.warn("Error al intentar sincronizar perfil:", error.message);
   }

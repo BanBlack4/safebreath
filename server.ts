@@ -16,7 +16,7 @@ import cors from "cors";
 import { registerEventConsumers } from "./server/events";
 
 dotenv.config();
-import * as admin from 'firebase-admin';
+import admin from 'firebase-admin';
 
 import geminiRoutes from "./server/routes/gemini";
 import firebaseRoutes from "./server/routes/firebase";

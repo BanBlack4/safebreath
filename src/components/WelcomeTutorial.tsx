@@ -11,26 +11,26 @@ export default function WelcomeTutorial({ onComplete }: WelcomeTutorialProps) {
 
   const steps = [
     {
-      title: "Bienvenido a SafeBreath",
-      description: "Tu asistente personal para monitorear tu salud respiratoria y cardíaca.",
+      title: "Estamos aquí para acompañarte",
+      description: "SafeBreath observa patrones en tu ritmo cardíaco para ayudarte a encontrar calma cuando más lo necesitas.",
       icon: <Heart className="w-12 h-12 text-[#00796b]" />,
       type: "modal"
     },
     {
-      title: "Monitoreo en Tiempo Real",
-      description: "Mide tus signos vitales al instante (pulsaciones, HRV, y oxígeno) y revisa tus métricas clave.",
+      title: "Un apoyo, no un médico",
+      description: "SafeBreath no es un médico. No diagnosticamos enfermedades ni reemplazamos el cuidado profesional.",
       icon: <Activity className="w-12 h-12 text-[#00796b]" />,
       type: "modal"
     },
     {
-      title: "Alertas Inteligentes",
-      description: "Recibe notificaciones inmediatas si detectamos alguna anomalía en tus rangos vitales.",
+      title: "Tu pulso te pertenece",
+      description: "Nunca compartimos tu ubicación ni tus datos de salud sin tu permiso explícito. Estás en control.",
       icon: <Check className="w-12 h-12 text-[#00796b]" />,
       type: "modal"
     },
     {
-      title: "Botón de Emergencia (SOS)",
-      description: "Presiona este botón en cualquier momento para alertar a tus contactos críticos o servicios médicos.",
+      title: "Alertas y botón de emergencia",
+      description: "Si notamos agitación, te sugeriremos una pausa. Siempre puedes usar el botón de SOS para contactar a tu apoyo.",
       icon: <ShieldAlert className="w-8 h-8 text-red-600" />,
       type: "tooltip"
     }

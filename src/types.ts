@@ -41,6 +41,7 @@ export interface UserProfile {
   alergias: boolean;
   bpmReposo: number;
   emergencyContacts?: EmergencyContact[];
+  preferenciaSos?: 'call' | 'sms' | 'both';
 }
 
 export interface ReflectionLog {

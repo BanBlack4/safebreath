@@ -6,18 +6,18 @@
 import { useState, useEffect } from 'react';
 import Header from './components/Header';
 import BottomNav from './components/BottomNav';
-import DashboardScreen from './components/DashboardScreen';
-import VitalsScreen from './components/VitalsScreen';
-import HealthProfileScreen from './components/HealthProfileScreen';
-import AdminDashboardScreen from './components/AdminDashboardScreen';
-import HistoryScreen from './components/HistoryScreen';
-import EventDetailScreen from './components/EventDetailScreen';
-import ActiveAlertScreen from './components/ActiveAlertScreen';
+import LiveMonitoringScreen from './components/LiveMonitoringScreen';
+import CalmInterventionScreen from './components/CalmInterventionScreen';
 import ConnectDevicesScreen from './components/ConnectDevicesScreen';
 import OnboardingScreen from './components/OnboardingScreen';
 import WelcomeTutorial from './components/WelcomeTutorial';
 import InitialProfileSetupModal from './components/InitialProfileSetupModal';
 import ErrorBoundary from './components/ErrorBoundary';
+import VitalsScreen from './components/VitalsScreen';
+import HealthProfileScreen from './components/HealthProfileScreen';
+import AdminDashboardScreen from './components/AdminDashboardScreen';
+import HistoryScreen from './components/HistoryScreen';
+import EventDetailScreen from './components/EventDetailScreen';
 import { AppScreen, UserProfile, ConnectedDevice, UserRole } from './types';
 import { motion, AnimatePresence } from 'motion/react';
 import { Heart, Activity, CheckCircle, Smartphone } from 'lucide-react';
@@ -25,7 +25,7 @@ import { onAuthStateChanged, User, signOut } from 'firebase/auth';
 import { auth, db } from './firebase';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { syncProfileToFirestore, getProfileFromFirestore } from './services/firestore';
-import { Toaster } from 'react-hot-toast';
+import { Toaster, toast } from 'react-hot-toast';
 
 const LOCAL_STORAGE_PROFILE_KEY = 'safebreath_user_profile_data';
 
@@ -40,11 +40,76 @@ const DEFAULT_PROFILE: UserProfile = {
   epoc: false,
   alergias: false,
   bpmReposo: 68,
-  emergencyContacts: []
+  emergencyContacts: [],
+  preferenciaSos: 'both'
 };
 
 export default function App() {
   const [currentScreen, setCurrentScreen] = useState<AppScreen>('dashboard');
+  const [previousScreen, setPreviousScreen] = useState<AppScreen>('dashboard');
+
+  useEffect(() => {
+    if (currentScreen !== 'active-alert') {
+      setPreviousScreen(currentScreen);
+    }
+  }, [currentScreen]);
+
+  const [showFeedbackToast, setShowFeedbackToast] = useState(false);
+
+  // Persistent active SOS incident state
+  const [isIncidentActive, setIsIncidentActive] = useState<boolean>(() => {
+    return localStorage.getItem('safebreath_incident_active') === 'true';
+  });
+
+  const [activeIncidentAlerts, setActiveIncidentAlerts] = useState<{ name: string; type: 'sms' | 'call'; timestamp: string }[]>(() => {
+    try {
+      const saved = localStorage.getItem('safebreath_incident_alerts');
+      return saved ? JSON.parse(saved) : [];
+    } catch (e) {
+      return [];
+    }
+  });
+
+  const [activeIncidentLogs, setActiveIncidentLogs] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem('safebreath_incident_logs');
+      return saved ? JSON.parse(saved) : [];
+    } catch (e) {
+      return [];
+    }
+  });
+
+  const [activeIncidentLogIndex, setActiveIncidentLogIndex] = useState<number>(() => {
+    const saved = localStorage.getItem('safebreath_incident_log_index');
+    return saved ? parseInt(saved) : 0;
+  });
+
+  const handleClearIncident = () => {
+    setIsIncidentActive(false);
+    setActiveIncidentAlerts([]);
+    setActiveIncidentLogs([]);
+    setActiveIncidentLogIndex(0);
+    localStorage.removeItem('safebreath_incident_active');
+    localStorage.removeItem('safebreath_incident_alerts');
+    localStorage.removeItem('safebreath_incident_logs');
+    localStorage.removeItem('safebreath_incident_log_index');
+  };
+
+  useEffect(() => {
+    localStorage.setItem('safebreath_incident_active', isIncidentActive ? 'true' : 'false');
+  }, [isIncidentActive]);
+
+  useEffect(() => {
+    localStorage.setItem('safebreath_incident_alerts', JSON.stringify(activeIncidentAlerts));
+  }, [activeIncidentAlerts]);
+
+  useEffect(() => {
+    localStorage.setItem('safebreath_incident_logs', JSON.stringify(activeIncidentLogs));
+  }, [activeIncidentLogs]);
+
+  useEffect(() => {
+    localStorage.setItem('safebreath_incident_log_index', activeIncidentLogIndex.toString());
+  }, [activeIncidentLogIndex]);
 
   // Real-time medical devices list stored inside local storage
   const [devices, setDevices] = useState<ConnectedDevice[]>(() => {
@@ -256,7 +321,12 @@ export default function App() {
         console.warn("DeviceMotion request error or denied:", e);
       }
     }
-    setCurrentScreen('active-alert');
+    if (currentScreen === 'active-alert') {
+      setCurrentScreen(previousScreen || 'dashboard');
+    } else {
+      setPreviousScreen(currentScreen);
+      setCurrentScreen('active-alert');
+    }
   };
 
   if (isAuthLoading) {
@@ -272,7 +342,7 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-[#f3faff] dark:bg-[#05141a] text-[#071e27] dark:text-[#cfe6f2] font-sans flex flex-col justify-between max-w-md mx-auto relative shadow-2xl border-x border-[#cfe6f2] dark:border-[#0f3443]">
+    <div className="h-screen bg-[#f3faff] dark:bg-[#05141a] text-[#071e27] dark:text-[#cfe6f2] font-sans flex flex-col justify-between max-w-md mx-auto relative shadow-2xl border-x border-[#cfe6f2] dark:border-[#0f3443] overflow-hidden">
       
       {/* Dynamic Header */}
       {currentScreen !== 'active-alert' && (
@@ -286,8 +356,10 @@ export default function App() {
         />
       )}
 
+      {/* Persistent SOS Status Banner removed per user request */}
+
       {/* Main scrolling content frame with motion switches transitions */}
-      <main className="flex-grow p-5 overflow-y-auto">
+      <main className="flex-grow p-4 overflow-y-auto pb-28">
         <ErrorBoundary keyIdentifier={currentScreen as string} onReset={() => setCurrentScreen('dashboard')}>
           <AnimatePresence mode="wait">
             {isCalibrating && (
@@ -317,14 +389,10 @@ export default function App() {
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: 10 }}
               transition={{ duration: 0.2 }}
+              className="h-full"
             >
-              <DashboardScreen
-                onStartCheckin={handleStartCheckin}
-                triggerAlertScreen={triggerAlertScreenWithPermission}
-                onScreenChange={(scr) => {
-                  if (scr === 'event-detail') setCurrentScreen('event-detail');
-                  else setCurrentScreen(scr as AppScreen);
-                }}
+              <LiveMonitoringScreen
+                 onStartIntervention={() => setCurrentScreen('active-alert')}
               />
             </motion.div>
           )}
@@ -416,15 +484,27 @@ export default function App() {
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
               transition={{ duration: 0.2 }}
-              className="w-full"
+              className="w-full h-full"
             >
-              <ActiveAlertScreen
-                onCancel={() => setCurrentScreen('dashboard')}
-                onBreatheTrigger={() => {
-                  setCurrentScreen('dashboard');
+              <CalmInterventionScreen
+                profile={profile}
+                onDismiss={() => {
+                   setCurrentScreen('dashboard');
+                   setTimeout(() => setShowFeedbackToast(true), 2000); // Show feedback gently after returning
+                   setTimeout(() => setShowFeedbackToast(false), 20000); // Auto hide after a while
                 }}
-                sosContacts={profile.emergencyContacts?.filter(c => c.name && c.phone) || []}
-                userProfile={profile}
+                onEscalate={() => {
+                   setCurrentScreen('dashboard');
+                }}
+                isIncidentActive={isIncidentActive}
+                onSetIncidentActive={setIsIncidentActive}
+                activeIncidentAlerts={activeIncidentAlerts}
+                onSetIncidentAlerts={setActiveIncidentAlerts}
+                activeIncidentLogs={activeIncidentLogs}
+                onSetIncidentLogs={setActiveIncidentLogs}
+                activeIncidentLogIndex={activeIncidentLogIndex}
+                onSetIncidentLogIndex={setActiveIncidentLogIndex}
+                onClearIncident={handleClearIncident}
               />
             </motion.div>
           )}
@@ -436,6 +516,7 @@ export default function App() {
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -10 }}
               transition={{ duration: 0.2 }}
+              className="h-full"
             >
               <ConnectDevicesScreen 
                 onBack={() => setCurrentScreen('vitals')} 
@@ -449,13 +530,11 @@ export default function App() {
       </main>
 
       {/* Persistent Bottom Tabs Navigation bar */}
-      {currentScreen !== 'active-alert' && (
-        <BottomNav
-          currentScreen={currentScreen}
-          onScreenChange={setCurrentScreen}
-          triggerAlertScreen={triggerAlertScreenWithPermission}
-        />
-      )}
+      <BottomNav
+        currentScreen={currentScreen}
+        onScreenChange={setCurrentScreen}
+        triggerAlertScreen={triggerAlertScreenWithPermission}
+      />
 
       {/* Welcome Tutorial Overlay */}
       {showTutorial && (
@@ -481,6 +560,35 @@ export default function App() {
 
       {/* System Notifications */}
       <Toaster position="top-center" toastOptions={{ className: 'dark:bg-[#0a232f] dark:text-white', style: { borderRadius: '16px', fontWeight: 'calc(bold)' } }} />
+
+      {/* Graceful Feedback UX */}
+      <AnimatePresence>
+        {showFeedbackToast && (
+          <motion.div
+            initial={{ opacity: 0, y: 50 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 50 }}
+            className="fixed bottom-24 left-4 right-4 z-40 bg-[#071e27] dark:bg-[#1e293b] text-white p-5 rounded-3xl shadow-xl flex flex-col gap-3"
+          >
+            <h3 className="font-semibold text-lg text-center">¿Te ayudó esta pausa?</h3>
+            <div className="flex gap-2">
+              <button 
+                onClick={() => { setShowFeedbackToast(false); toast.success("Gracias por dejarnos saber."); }}
+                className="flex-1 py-3 bg-[#00796b] hover:bg-[#005e53] rounded-2xl font-medium transition-colors"
+              >
+                Sí, estoy mejor
+              </button>
+              <button 
+                onClick={() => { setShowFeedbackToast(false); toast("Anotado. Seguiremos calibrando el sensor.", { icon: '📊' }) }}
+                className="flex-1 py-3 bg-[#334155] hover:bg-[#475569] rounded-2xl font-medium transition-colors"
+              >
+                Falsa Alarma
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
     </div>
   );
 }

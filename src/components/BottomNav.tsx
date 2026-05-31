@@ -66,7 +66,7 @@ export default function BottomNav({ currentScreen, onScreenChange, triggerAlertS
       {/* Persistent Rapid Action SOS Button */}
       <button
         onClick={triggerAlertScreen}
-        className="flex flex-col items-center justify-center p-2 rounded-xl text-red-600 hover:text-red-800 active:scale-90 transition"
+        className="emergency-button flex flex-col items-center justify-center p-2 rounded-xl text-red-600 hover:text-red-800 active:scale-90 transition"
       >
         <span className="relative flex h-3 w-3 mb-1">
           <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>

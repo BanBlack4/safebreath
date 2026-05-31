@@ -1,23 +1,44 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@300;400;500;600;700&display=swap');
 @import "tailwindcss";
 
 @custom-variant dark (&:where(.dark, .dark *));
 
 @theme {
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
+  
+  /* Calm Palette */
+  --color-calm-teal-50: #f0fdfa;
+  --color-calm-teal-100: #ccfbf1;
+  --color-calm-teal-200: #99f6e4;
+  --color-calm-teal-300: #5eead4;
+  --color-calm-teal-400: #2dd4bf;
+  --color-calm-teal-500: #14b8a6;
+  --color-calm-teal-600: #0d9488;
+  --color-calm-teal-700: #0f766e;
+  --color-calm-teal-800: #115e59;
+  --color-calm-teal-900: #134e4a;
+  --color-calm-teal-950: #042f2e;
+
+  /* Ambient Slate (Dark mode background) */
+  --color-ambient-900: #0f172a;
+  --color-ambient-950: #020617;
 }
 
 body {
-  background-color: #e6f6ff;
-  color: #071e27;
+  background-color: #f7fcff;
+  color: #0c2027;
   font-family: var(--font-sans);
   margin: 0;
   padding: 0;
   min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 .dark body {
-  background-color: #05141a;
-  color: #cfe6f2;
+  background-color: var(--color-ambient-950);
+  color: #e0f2fe;
 }
 
 /* Custom scrollbar handling for elegant mobile feel */
@@ -31,10 +52,10 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(0, 94, 83, 0.15);
+  background: rgba(20, 184, 166, 0.15); /* calm-teal-500 @ 15% */
   border-radius: 9999px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(0, 94, 83, 0.35);
+  background: rgba(20, 184, 166, 0.35);
 }

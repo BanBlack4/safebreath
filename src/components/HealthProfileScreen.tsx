@@ -5,7 +5,7 @@
 
 import { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
-import { Save, AlertCircle, Sparkles, CheckCircle2, LogOut, Database, Phone, Plus, Trash2 } from 'lucide-react';
+import { Save, AlertCircle, Sparkles, CheckCircle2, LogOut, Database, Phone, Plus, Trash2, Sliders, MessageSquare, Info, Send } from 'lucide-react';
 import { isValidPhoneNumber } from 'libphonenumber-js';
 import { UserProfile, EmergencyContact } from '../types';
 import { auth } from '../firebase';
@@ -33,6 +33,7 @@ export default function HealthProfileScreen({ profile, onSaveProfile, onSignOut,
 
   const [bpmReposo, setBpmReposo] = useState(profile.bpmReposo);
   const [emergencyContacts, setEmergencyContacts] = useState(profile.emergencyContacts || []);
+  const [preferenciaSos, setPreferenciaSos] = useState<'call' | 'sms' | 'both'>(profile.preferenciaSos || 'both');
   const [toastMsg, setToastMsg] = useState<string | null>(null);
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
 
@@ -133,7 +134,8 @@ export default function HealthProfileScreen({ profile, onSaveProfile, onSignOut,
       epoc,
       alergias,
       bpmReposo: Number(bpmReposo),
-      emergencyContacts
+      emergencyContacts,
+      preferenciaSos
     });
 
     setToastMsg("Cambios guardados con éxito.");
@@ -441,6 +443,46 @@ export default function HealthProfileScreen({ profile, onSaveProfile, onSignOut,
             ))}
           </div>
         )}
+      </section>
+
+      {/* ⚙️ CONFIGURACIÓN DE ALERTAS DE EMERGENCIA */}
+      <section className="bg-white dark:bg-[#0a232f] rounded-3xl p-5 shadow-sm border border-gray-100 dark:border-[#133240] space-y-5 font-sans">
+        <div className="flex items-center gap-3">
+          <span className="p-2 bg-teal-50 dark:bg-teal-900/40 rounded-xl text-teal-700 dark:text-teal-400">
+            <Sliders className="w-5 h-5 text-teal-600 dark:text-teal-450" />
+          </span>
+          <div>
+            <h3 className="font-bold text-base text-[#071e27] dark:text-white">Ajustes de Alertas S.O.S.</h3>
+            <p className="text-xs text-gray-500 dark:text-gray-400">Configura qué ocurre automáticamente durante crisis o pulsaciones altas.</p>
+          </div>
+        </div>
+
+        {/* SOS Action Preference Select */}
+        <div className="space-y-2">
+          <label className="text-xs font-bold text-gray-400 uppercase tracking-widest block">Canal de Auxilio Preferido</label>
+          <div className="grid grid-cols-3 gap-2">
+            {[
+              { id: 'sms' as const, label: 'SMS Silencioso', desc: 'Envía texto con biometría' },
+              { id: 'call' as const, label: 'Llamada Vocal', desc: 'Lanza llamada telefónica' },
+              { id: 'both' as const, label: 'Ambos Canales', desc: 'Habilita ambas opciones' }
+            ].map(opt => (
+              <button
+                key={opt.id}
+                type="button"
+                onClick={() => setPreferenciaSos(opt.id)}
+                className={`p-3 rounded-2xl border text-left flex flex-col justify-between transition cursor-pointer active:scale-[0.98] ${
+                  preferenciaSos === opt.id
+                    ? 'bg-[#a4f0e9]/50 dark:bg-[#005e53]/30 border-[#00796b] text-[#1d706a] dark:text-white ring-1 ring-[#00796b]'
+                    : 'bg-transparent border-gray-150 dark:border-[#133240] text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-900/40'
+                }`}
+              >
+                <span className="text-xs font-extrabold tracking-tight">{opt.label}</span>
+                <span className="text-[9px] text-gray-400 font-medium leading-tight mt-1">{opt.desc}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+
       </section>
 
       {/* Panel Administrativo y de KPIs para Directivos */}

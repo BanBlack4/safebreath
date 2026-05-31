@@ -1,5 +1,5 @@
 import { IHealthProfileRepository } from '../interfaces/health-profile.repository.interface';
-import * as admin from 'firebase-admin';
+import admin from 'firebase-admin';
 
 export class FirestoreHealthProfileRepository implements IHealthProfileRepository {
   async getProfile(userId: string): Promise<any> {

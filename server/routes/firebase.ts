@@ -1,5 +1,6 @@
 import { Router } from 'express';
-import * as admin from 'firebase-admin';
+import admin from 'firebase-admin';
+import { latamSmsService } from '../services/latamSmsService';
 
 const router = Router();
 
@@ -14,13 +15,20 @@ router.post('/sos', async (req, res) => {
     const results: any[] = [];
     const errors: any[] = [];
 
+    // Trigger parallel low-latency SMS dispatch for each contact via the specialized LatAm trunks
     for (const contact of contacts) {
       if (!contact.phone || contact.phone === '911') continue;
 
       try {
-        results.push({ name: contact.name, status: "simulated_fcm_success" });
+        const smsResult = await latamSmsService.dispatchLatAmSms(
+          contact.name,
+          contact.phone,
+          message,
+          contact.countryCode || '+56'
+        );
+        results.push(smsResult);
       } catch (err: any) {
-        console.error(`Failed to push FCM to ${contact.name}:`, err.message);
+        console.error(`Failed to dispatch LatAm Native SMS to ${contact.name}:`, err.message);
         errors.push({ name: contact.name, error: err.message });
       }
     }
@@ -30,7 +38,8 @@ router.post('/sos', async (req, res) => {
       await firestore.collection('global_alerts').add({
         message,
         timestamp: admin.firestore.FieldValue.serverTimestamp(),
-        contacts: contacts.map((c: any) => c.name)
+        contacts: contacts.map((c: any) => c.name),
+        smsProviderResults: results
       });
     } catch (e: any) {
        console.warn("Could not save to firestore, credentials may not be fully initialized:", e.message);
@@ -43,7 +52,7 @@ router.post('/sos', async (req, res) => {
     });
   } catch (error: any) {
     console.error("Error in Firebase SOS route:", error);
-    res.status(500).json({ error: "Fallo al inicializar el servicio de alertas FCM." });
+    res.status(500).json({ error: "Fallo al inicializar el servicio de alertas FCM/SMS." });
   }
 });
 
