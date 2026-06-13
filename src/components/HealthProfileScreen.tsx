@@ -8,7 +8,9 @@ import { motion } from 'motion/react';
 import { Save, AlertCircle, Sparkles, CheckCircle2, LogOut, Database, Phone, Plus, Trash2, Sliders, MessageSquare, Info, Send } from 'lucide-react';
 import { isValidPhoneNumber } from 'libphonenumber-js';
 import { UserProfile, EmergencyContact } from '../types';
-import { auth } from '../firebase';
+import { auth, db } from '../firebase';
+import { collection, getDocs, doc, getDoc } from 'firebase/firestore';
+import { toast } from 'react-hot-toast';
 
 interface HealthProfileScreenProps {
   profile: UserProfile;

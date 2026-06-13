@@ -5,6 +5,8 @@ import { EmotionHapticEngine } from '../services/haptics/HapticEngine';
 import { useAppSettingsStore } from '../store/useAppSettingsStore';
 import { UserProfile, EmergencyContact } from '../types';
 import { toast } from 'react-hot-toast';
+import { insertHealthEvent } from '../services/supabaseData';
+import { auth } from '../firebase';
 
 interface CalmInterventionScreenProps {
   profile: UserProfile;
@@ -238,6 +240,29 @@ export default function CalmInterventionScreen({
       }
     }
   }, [phase, contactsKey]);
+
+  useEffect(() => {
+    const user = auth.currentUser;
+    if (!user) return;
+
+    if (phase === 'breathing') {
+      insertHealthEvent(
+        user.uid,
+        'Respiración Guiada',
+        'calm_intervention',
+        'El usuario inició un ejercicio de respiración guiada para disminuir agitación.',
+        'Actividad SOS'
+      ).catch(e => console.error('Error insertando log de intervención:', e));
+    } else if (phase === 'sos_dispatch') {
+      insertHealthEvent(
+        user.uid,
+        'S.O.S. Activado',
+        'sos_dispatch',
+        'Protocolo de emergencia activado desde el dispositivo móvil.',
+        'Emergencia'
+      ).catch(e => console.error('Error insertando log de SOS:', e));
+    }
+  }, [phase]);
 
   const bgStyle = nightMode
     ? "bg-black text-[#cbd5e1]"
@@ -553,9 +578,9 @@ export default function CalmInterventionScreen({
                            </p>
                         </div>
                      ) : (
-                        emergencyContacts.map(contact => (
+                        emergencyContacts.map((contact, index) => (
                            <div 
-                             key={contact.id}
+                             key={contact.id || `contact-${index}`}
                              className="w-full flex flex-col p-3.5 bg-white/5 border border-white/15 rounded-2xl text-white transition gap-3"
                            >
                              <div className="flex items-center justify-between">

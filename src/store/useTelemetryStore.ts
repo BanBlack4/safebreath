@@ -4,6 +4,7 @@
  */
 
 import { create } from 'zustand';
+import { syncTelemetryBatch } from '../services/telemetrySupabase';
 
 export interface TelemetryPoint {
   bpm: number;
@@ -34,50 +35,72 @@ interface TelemetryState {
 // To prevent 5Hz React rerenders from BLE, we batch updates
 let pendingTelemetry: TelemetryPoint[] = [];
 let batchTimeout: ReturnType<typeof setTimeout> | null = null;
+let telemetrySyncQueue: TelemetryPoint[] = [];
+let syncInterval: ReturnType<typeof setInterval> | null = null;
 
-export const useTelemetryStore = create<TelemetryState>((set) => ({
-  liveBpm: 0,
-  liveHrv: 0,
-  history: [],
-  isConnected: false,
-  isSyncing: false,
-  batteryLevel: null,
-  sensorQuality: 'searching',
-
-  setConnectionState: (connected) => set({ isConnected: connected }),
-  setSyncingState: (syncing) => set({ isSyncing: syncing }),
-  
-  addTelemetryPoint: (point) => {
-    // Normalizing frequent writes - store in buffer
-    pendingTelemetry.push(point);
-    
-    if (!batchTimeout) {
-      batchTimeout = setTimeout(() => {
-        set((state) => {
-          const freshHistory = [...state.history, ...pendingTelemetry].slice(-60); // 60s window
-          const latest = pendingTelemetry[pendingTelemetry.length - 1];
-          pendingTelemetry = [];
-          batchTimeout = null;
-          
-          return {
-            history: freshHistory,
-            liveBpm: latest.bpm,
-            liveHrv: latest.hrv
-          };
-        });
-      }, 500); // Only flush to UI twice per second (2Hz max)
+const startSyncEngine = () => {
+  if (syncInterval) return;
+  syncInterval = setInterval(() => {
+    if (telemetrySyncQueue.length > 0) {
+      // Create a snapshot and clear the queue
+      const snapshot = [...telemetrySyncQueue];
+      telemetrySyncQueue = [];
+      syncTelemetryBatch(snapshot);
     }
-  },
+  }, 10000); // Sync to DB every 10 seconds
+};
 
-  updateBattery: (level) => set({ batteryLevel: level }),
-  updateSensorQuality: (quality) => set({ sensorQuality: quality }),
-
-  reset: () => set({
+export const useTelemetryStore = create<TelemetryState>((set) => {
+  startSyncEngine();
+  
+  return {
     liveBpm: 0,
     liveHrv: 0,
     history: [],
     isConnected: false,
-    sensorQuality: 'searching',
+    isSyncing: false,
     batteryLevel: null,
-  }),
-}));
+    sensorQuality: 'searching',
+
+    setConnectionState: (connected) => set({ isConnected: connected }),
+    setSyncingState: (syncing) => set({ isSyncing: syncing }),
+    
+    addTelemetryPoint: (point) => {
+      // Normalizing frequent writes - store in buffer
+      pendingTelemetry.push(point);
+      telemetrySyncQueue.push(point); // Also add to DB sync queue
+      
+      if (!batchTimeout) {
+        batchTimeout = setTimeout(() => {
+          set((state) => {
+            const freshHistory = [...state.history, ...pendingTelemetry].slice(-60); // 60s window
+            const latest = pendingTelemetry[pendingTelemetry.length - 1];
+            pendingTelemetry = [];
+            batchTimeout = null;
+            
+            return {
+              history: freshHistory,
+              liveBpm: latest.bpm,
+              liveHrv: latest.hrv
+            };
+          });
+        }, 500); // Only flush to UI twice per second (2Hz max)
+      }
+    },
+
+    updateBattery: (level) => set({ batteryLevel: level }),
+    updateSensorQuality: (quality) => set({ sensorQuality: quality }),
+
+    reset: () => {
+      telemetrySyncQueue = [];
+      set({
+        liveBpm: 0,
+        liveHrv: 0,
+        history: [],
+        isConnected: false,
+        sensorQuality: 'searching',
+        batteryLevel: null,
+      });
+    }
+  };
+});

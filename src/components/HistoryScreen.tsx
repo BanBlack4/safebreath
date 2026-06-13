@@ -8,8 +8,9 @@ import { motion, AnimatePresence } from 'motion/react';
 import { FileText, Calendar, Plus, ChevronRight, Activity, Smile, Settings, AlertTriangle, ShieldCheck, Clock, CheckCircle2 } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine, ReferenceArea } from 'recharts';
 import { UserProfile, HealthEvent } from '../types';
-import { getHistoryEventsFromFirestore } from '../services/firestore';
+import { fetchHealthHistory, fetchUserInsight, insertManualLog } from '../services/supabaseData';
 import { toast } from 'react-hot-toast';
+import { auth } from '../firebase';
 
 interface HistoryScreenProps {
   profile: UserProfile;
@@ -22,133 +23,55 @@ export default function HistoryScreen({ profile, onEventSelect, onScreenChange }
   const [selectedDateFilter, setSelectedDateFilter] = useState<string>('Todos');
   const [showAddLogModal, setShowAddLogModal] = useState(false);
 
-  // States for logging a manual check-in dynamically
   const [manualBpm, setManualBpm] = useState(70);
   const [manualSpo2, setManualSpo2] = useState(98);
   const [manualMood, setManualMood] = useState<'Calm' | 'Neutral' | 'Anxious'>('Calm');
   const [manualActivity, setManualActivity] = useState('');
 
   const [selectedEvent, setSelectedEvent] = useState<HealthEvent | null>(null);
-
-  const [events, setEvents] = useState<HealthEvent[]>([
-    {
-      id: '1',
-      title: 'Alerta SOS Activada',
-      type: 'critical',
-      time: '14:20',
-      dateStr: 'Hoy, 24 de Mayo',
-      description: 'Contacto de emergencia Sarah Jenkins notificado automáticamente por caída o estrés detectado.',
-      badge: 'Automático'
-    },
-    {
-      id: '2',
-      title: 'Pico de Ritmo Cardíaco',
-      type: 'vital_peak',
-      time: '11:05',
-      dateStr: 'Hoy, 24 de Mayo',
-      description: 'Sugerencia de respiración completada de forma correcta. Ritmo cardíaco normalizado en 4 minutos.',
-      badge: 'Resuelto',
-      details: {
-        peakBpm: 142,
-        status: 'Resuelto'
-      }
-    },
-    {
-      id: '3',
-      title: 'Pesquisa Preventiva Diario',
-      type: 'checkin',
-      time: '22:45',
-      dateStr: 'Ayer, 23 de Mayo',
-      description: 'Usuario reportó sentirse "Tranquilo" y "Bien". Saturación de Oxígeno (SpO2): 98%.',
-      badge: 'Manual'
-    },
-    {
-      id: '4',
-      title: 'Crisis de Ansiedad',
-      type: 'anxiety',
-      time: '16:15 - 16:40',
-      dateStr: 'Ayer, 23 de Mayo',
-      description: 'Ataque de pánico leve auto-gestionado. Protocolo de respiración 4-7-8 activado en tu smartwatch.',
-      badge: 'Estabilizado',
-      details: {
-        duration: '25 minutos',
-        hrvTrend: 'Baja'
-      }
-    },
-    {
-      id: '5',
-      title: 'Chequeo Nocturno',
-      type: 'checkin',
-      time: '21:30',
-      dateStr: 'Lunes, 22 de Mayo',
-      description: 'Estado reportado: "Calmado". Ritmo cardíaco: 68 BPM. O2: 99%.',
-      badge: 'Manual'
-    },
-    {
-      id: '6',
-      title: 'Pico de Ritmo Cardíaco',
-      type: 'vital_peak',
-      time: '14:15',
-      dateStr: 'Lunes, 22 de Mayo',
-      description: '130 BPM detectados en reposo. Sesión de calma omitida por el usuario.',
-      badge: 'Ignorado',
-      details: {
-        peakBpm: 130,
-        status: 'Ignorado'
-      }
-    },
-    {
-      id: '7',
-      title: 'Resumen Semanal',
-      type: 'checkin',
-      time: '10:00',
-      dateStr: 'Domingo, 21 de Mayo',
-      description: 'La semana pasada experimentaste 3 alertas críticas menos que la anterior. ¡Buen trabajo!',
-      badge: 'Sistema'
-    }
-  ]);
+  const [events, setEvents] = useState<HealthEvent[]>([]);
+  const [insightText, setInsightText] = useState<string>('');
 
   useEffect(() => {
-    const loadHistory = async () => {
-      const fbEvents = await getHistoryEventsFromFirestore();
-      if (fbEvents && fbEvents.length > 0) {
-        // Here we could merge, but for simplicity we append any external firestore ones or just use default mock 
-        // to ensure the UI looks populated. We'll merge them by ID.
-        setEvents(prev => {
-          const merged = [...prev];
-          fbEvents.forEach(fbE => {
-            if (!merged.find(e => e.id === fbE.id)) {
-              merged.push(fbE);
-            }
-          });
-          // Simple sort: assume id is a timestamp or string timestamp so we sort descending loosely if needed
-          return merged;
-        });
+    const loadData = async () => {
+      const user = auth.currentUser;
+      if (!user) return;
+      
+      const history = await fetchHealthHistory(user.uid);
+      if (history.length > 0) {
+        setEvents(history);
+      }
+      
+      const insight = await fetchUserInsight(user.uid);
+      if (insight) {
+        setInsightText(insight.insight_text);
+      } else {
+        setInsightText('Análisis en proceso. Continúa registrando tus signos vitales.');
       }
     };
-    loadHistory();
+    loadData();
   }, []);
 
   const availableDates = ['Todos', ...Array.from(new Set(events.map(e => e.dateStr)))];
 
   const stats = {
-    eventsCount: events.length + 20, // Baseline statistics representation
-    alertsCount: events.filter(e => e.type === 'critical' || e.type === 'anxiety').length + 1,
-    checkinsCount: events.filter(e => e.type === 'checkin' || e.type === 'vital_peak').length + 19
+    eventsCount: events.length,
+    alertsCount: events.filter(e => e.type === 'critical' || e.type === 'anxiety').length,
+    checkinsCount: events.filter(e => e.type === 'checkin' || e.type === 'vital_peak' || e.type === 'manual_log').length
   };
 
   const chartData = [
     { time: '08:00', bpm: 72 },
     { time: '10:00', bpm: 78 },
-    { time: '11:05', bpm: 142 }, // Pico
+    { time: '11:05', bpm: 142 },
     { time: '12:00', bpm: 85 },
-    { time: '14:20', bpm: 120 }, // Alerta
+    { time: '14:20', bpm: 120 },
     { time: '16:00', bpm: 90 },
     { time: '18:00', bpm: 75 },
     { time: '20:00', bpm: 70 }
   ];
 
-  const handleAddLog = () => {
+  const handleAddLog = async () => {
     const bpm = Number(manualBpm);
     const spo2 = Number(manualSpo2);
 
@@ -162,25 +85,33 @@ export default function HistoryScreen({ profile, onEventSelect, onScreenChange }
       return;
     }
 
-    const newEvent: HealthEvent = {
-      id: String(Date.now()),
-      title: 'Preventive Check-in',
-      type: 'checkin',
-      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      dateStr: 'Hoy, 24 de Mayo',
-      description: `Check-in preventivo manual. Estado reportado: "${manualMood === 'Calm' ? 'Tranquilo' : manualMood === 'Neutral' ? 'Neutral' : 'Ansioso'}". Ritmo cardíaco: ${bpm} BPM. Saturación O2: ${spo2}%.${manualActivity ? ` Actividad: ${manualActivity}.` : ''}`,
-      badge: 'Manual',
-      details: {
-        bpm,
-        spo2,
-        mood: manualMood,
-        activity: manualActivity || 'Ninguna especificada'
-      }
-    };
+    const user = auth.currentUser;
+    if (!user) {
+      toast.error('Debe iniciar sesión para registrar datos.');
+      return;
+    }
 
-    setEvents([newEvent, ...events]);
-    setShowAddLogModal(false);
-    toast.success('Check-in manual registrado exitosamente');
+    try {
+      toast.loading('Registrando...', { id: 'manual-log' });
+      const newLog = await insertManualLog(user.uid, bpm, spo2, manualMood, manualActivity);
+      
+      const newEvent: HealthEvent = {
+        id: newLog.id,
+        title: newLog.title,
+        type: newLog.type as any,
+        time: newLog.time_str,
+        dateStr: newLog.date_str,
+        description: newLog.description,
+        badge: newLog.badge,
+        details: newLog.details
+      };
+      
+      setEvents([newEvent, ...events]);
+      setShowAddLogModal(false);
+      toast.success('Check-in manual registrado exitosamente', { id: 'manual-log' });
+    } catch (e) {
+      toast.error('Error al guardar el check-in (Verificar conexión a Supabase)', { id: 'manual-log' });
+    }
   };
 
   const filteredEvents = events.filter(e => {
@@ -223,6 +154,29 @@ export default function HistoryScreen({ profile, onEventSelect, onScreenChange }
             <p className="text-2xl font-black text-[#00796b] dark:text-[#a4f0e9] mt-1">{stats.checkinsCount}</p>
           </div>
         </div>
+
+        {/* AI Insight Widget (Humanized Backend Analytics Simulation) */}
+        <motion.div 
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="bg-gradient-to-br from-indigo-50 to-purple-50 dark:from-indigo-950/30 dark:to-purple-900/20 p-5 rounded-2xl shadow-sm border border-indigo-100 dark:border-indigo-800/50 relative overflow-hidden"
+        >
+          <div className="absolute -right-4 -top-4 text-indigo-500/10 dark:text-indigo-400/5">
+             <Smile className="w-24 h-24" />
+          </div>
+          <div className="relative z-10 space-y-3">
+             <div className="flex items-center gap-2">
+                <span className="flex h-2 w-2 relative">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-indigo-500"></span>
+                </span>
+                <h3 className="text-xs font-bold tracking-widest text-indigo-800 dark:text-indigo-300 uppercase">Insights del Asistente</h3>
+             </div>
+             <p className="text-[13px] text-indigo-950/80 dark:text-indigo-100/80 leading-relaxed font-medium pr-6">
+                "{insightText}"
+             </p>
+          </div>
+        </motion.div>
 
         {/* Heart Rate Chart */}
         <div className="bg-white dark:bg-[#0a232f] p-4 rounded-xl shadow-sm border border-gray-100 dark:border-[#133240] h-64 mt-4">
@@ -290,7 +244,7 @@ export default function HistoryScreen({ profile, onEventSelect, onScreenChange }
         ) : (
           <div className="space-y-4">
             {filteredEvents.map((evt, index) => (
-              <div key={evt.id} className="space-y-2">
+              <div key={evt.id || `evt-${index}`} className="space-y-2">
                 {/* Date label header section */}
                 {(index === 0 || filteredEvents[index - 1]?.dateStr !== evt.dateStr) && (
                   <h3 className="text-xs font-extrabold text-gray-400 uppercase tracking-widest mt-4">
