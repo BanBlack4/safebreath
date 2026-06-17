@@ -19,7 +19,7 @@ interface HistoryScreenProps {
 }
 
 export default function HistoryScreen({ profile, onEventSelect, onScreenChange }: HistoryScreenProps) {
-  const [activeFilter, setActiveFilter] = useState<'Todos' | 'Alertas' | 'Vitals' | 'Manual Check-ins'>('Todos');
+  const [activeFilter, setActiveFilter] = useState<'Todos' | 'Alertas' | 'Vitals' | 'Manual Check-ins' | 'Intervenciones'>('Todos');
   const [selectedDateFilter, setSelectedDateFilter] = useState<string>('Todos');
   const [showAddLogModal, setShowAddLogModal] = useState(false);
 
@@ -118,6 +118,7 @@ export default function HistoryScreen({ profile, onEventSelect, onScreenChange }
     const matchesFilter = activeFilter === 'Todos' ||
       (activeFilter === 'Alertas' && (e.type === 'critical' || e.type === 'anxiety')) ||
       (activeFilter === 'Vitals' && e.type === 'vital_peak') ||
+      (activeFilter === 'Intervenciones' && (e.type === 'calm_intervention' || e.type === 'sos_dispatch')) ||
       (activeFilter === 'Manual Check-ins' && e.type === 'checkin');
     
     const matchesDate = selectedDateFilter === 'Todos' || e.dateStr === selectedDateFilter;
@@ -219,7 +220,7 @@ export default function HistoryScreen({ profile, onEventSelect, onScreenChange }
         </div>
 
         <div className="flex gap-2 overflow-x-auto pb-1.5 scrollbar-thin">
-          {(['Todos', 'Alertas', 'Vitals', 'Manual Check-ins'] as const).map((filter) => (
+          {(['Todos', 'Alertas', 'Vitals', 'Manual Check-ins', 'Intervenciones'] as const).map((filter) => (
             <button
               key={`type-${filter}`}
               onClick={() => setActiveFilter(filter)}
@@ -257,19 +258,25 @@ export default function HistoryScreen({ profile, onEventSelect, onScreenChange }
                   initial={{ opacity: 0, scale: 0.98 }}
                   animate={{ opacity: 1, scale: 1 }}
                   className={`bg-white dark:bg-[#0a232f] rounded-2xl p-4.5 border-l-4 shadow-sm relative overflow-hidden ${
-                    evt.type === 'critical'
+                    evt.type === 'critical' || evt.type === 'sos_dispatch'
                       ? 'border-red-600'
                       : evt.type === 'vital_peak'
                       ? 'border-[#a4f0e9]'
                       : evt.type === 'anxiety'
                       ? 'border-amber-500'
+                      : evt.type === 'calm_intervention'
+                      ? 'border-blue-500'
                       : 'border-[#00796b]'
                   }`}
                 >
                   <div className="flex justify-between items-start mb-2">
                     <div className="flex items-center gap-2">
-                      {evt.type === 'critical' ? (
+                      {evt.type === 'critical' || evt.type === 'sos_dispatch' ? (
                         <AlertTriangle className="w-5 h-5 text-red-650" />
+                      ) : evt.type === 'calm_intervention' ? (
+                        <div className="w-5 h-5 rounded-full flex items-center justify-center bg-blue-100 dark:bg-blue-900/50">
+                          <CheckCircle2 className="w-3.5 h-3.5 text-blue-600 dark:text-blue-300" />
+                        </div>
                       ) : (
                         <CheckCircle2 className="w-5 h-5 text-teal-800 dark:text-[#a4f0e9]" />
                       )}

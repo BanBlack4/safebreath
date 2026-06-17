@@ -12,12 +12,38 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
       if (user) {
         try {
           const token = await user.getIdToken();
-          const headers = new Headers(options.headers);
-          headers.set('Authorization', `Bearer ${token}`);
-          options.headers = headers;
+          
+          // Construct a plain JavaScript object for headers to prevent any issues where
+          // internal libraries clone, spread, or manipulate headers (which fails with Headers objects).
+          const headersObj: Record<string, string> = {};
+          
+          if (options.headers) {
+            if (options.headers instanceof Headers) {
+              options.headers.forEach((value, key) => {
+                headersObj[key] = value;
+              });
+            } else if (Array.isArray(options.headers)) {
+              options.headers.forEach(([key, value]) => {
+                headersObj[key] = value;
+              });
+            } else {
+              Object.assign(headersObj, options.headers);
+            }
+          }
+          
+          // Overwrite the Authorization header with Firebase's JWT (and also preserve the apiKey copy)
+          headersObj['Authorization'] = `Bearer ${token}`;
+          // Explicitly ensure the apikey is present
+          if (!headersObj['apikey'] && !headersObj['apiKey']) {
+            headersObj['apikey'] = supabaseAnonKey;
+          }
+          
+          options.headers = headersObj;
         } catch (err) {
           console.error("Error getting Firebase token:", err);
         }
+      } else {
+        console.warn("No authenticated Firebase user found during Supabase request!");
       }
       return fetch(url, options);
     }

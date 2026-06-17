@@ -4,6 +4,27 @@ import { latamSmsService } from '../services/latamSmsService';
 
 const router = Router();
 
+router.post('/set-custom-claims', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ error: "Missing or invalid Authorization header" });
+    }
+    const idToken = authHeader.split('Bearer ')[1];
+    
+    // Verify token
+    const decodedToken = await admin.auth().verifyIdToken(idToken);
+    
+    // Set custom claim
+    await admin.auth().setCustomUserClaims(decodedToken.uid, { role: 'authenticated' });
+    
+    res.json({ success: true, message: "Custom claims set successfully" });
+  } catch (error: any) {
+    console.error("Error setting custom claims:", error);
+    res.status(500).json({ error: "Failed to set custom claims: " + error.message });
+  }
+});
+
 router.post('/sos', async (req, res) => {
   try {
     const { contacts, message } = req.body;

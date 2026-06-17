@@ -23,7 +23,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Heart, Activity, CheckCircle, Smartphone } from 'lucide-react';
 import { onAuthStateChanged, User, signOut } from 'firebase/auth';
 import { auth, db } from './firebase';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, writeBatch, collection, getDocs } from 'firebase/firestore';
 import { syncProfileToFirestore, getProfileFromFirestore } from './services/firestore';
 import { Toaster, toast } from 'react-hot-toast';
 
@@ -159,7 +159,7 @@ export default function App() {
     ];
   });
 
-  const handleUpdateDevices = (newDevices: ConnectedDevice[]) => {
+  const handleUpdateDevices = async (newDevices: ConnectedDevice[]) => {
     setDevices(newDevices);
     try {
       localStorage.setItem('safebreath_connected_devices', JSON.stringify(newDevices));
@@ -167,11 +167,15 @@ export default function App() {
     
     if (auth.currentUser) {
       try {
-        const userRef = doc(db, 'users', auth.currentUser.uid);
-        setDoc(userRef, { devices: newDevices }, { merge: true }).catch(err => {
-          console.warn("Failed to sync devices to Firestore:", err);
+        const batch = writeBatch(db);
+        newDevices.forEach(device => {
+          const deviceRef = doc(db, 'users', auth.currentUser!.uid, 'devices', device.id);
+          batch.set(deviceRef, device, { merge: true });
         });
-      } catch (e) {}
+        await batch.commit();
+      } catch (e) {
+        console.warn("Failed to sync devices to Firestore:", e);
+      }
     }
   };
   const [lastBpm, setLastBpm] = useState(72);
@@ -246,11 +250,26 @@ export default function App() {
             setUserRole((data?.role as UserRole) || 'user');
             
             // Sync initial devices if available
-            if (data?.devices && Array.isArray(data.devices)) {
+            const devicesSnapshot = await getDocs(collection(db, 'users', currentUser.uid, 'devices'));
+            if (!devicesSnapshot.empty) {
+              const fetchedDevices = devicesSnapshot.docs.map(doc => doc.data() as ConnectedDevice);
+              setDevices(fetchedDevices);
+              try {
+                localStorage.setItem('safebreath_connected_devices', JSON.stringify(fetchedDevices));
+              } catch(e) {}
+            } else if (data?.devices && Array.isArray(data.devices)) {
+              // Fallback to legacy array if it exists
               setDevices(data.devices);
               try {
                 localStorage.setItem('safebreath_connected_devices', JSON.stringify(data.devices));
               } catch(e) {}
+              // Migrate legacy data to subcollection
+              const batch = writeBatch(db);
+              data.devices.forEach((dev: ConnectedDevice) => {
+                const deviceRef = doc(db, 'users', currentUser.uid, 'devices', dev.id);
+                batch.set(deviceRef, dev, { merge: true });
+              });
+              await batch.commit();
             }
           }
         } catch (error: any) {
@@ -259,6 +278,14 @@ export default function App() {
           }
         }
         
+        // Log Firebase Token claims (Optional, for debugging)
+        try {
+          let idTokenResult = await currentUser.getIdTokenResult();
+          console.log("🔥 [Firebase Auth] Token claims:", idTokenResult.claims);
+        } catch(e) {
+          console.error("No se pudo obtener token claims", e);
+        }
+
         // Load external profile
         const remoteProfile = await getProfileFromFirestore();
         if (remoteProfile) {

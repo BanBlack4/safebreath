@@ -23,13 +23,26 @@ import firebaseRoutes from "./server/routes/firebase";
 
 dotenv.config();
 
-// Initialize Firebase Admin for Firebase Cloud Messaging (FCM)
-// Required for sending Push Notifications
+// Initialize Firebase Admin for Firebase Cloud Messaging (FCM) and Auth
+// Required for sending Push Notifications and assigning custom claims
 try {
-  admin.initializeApp({
-    projectId: "tensile-lens-l8gvj",
-  });
-  console.log("Firebase Admin initialized for Cloud Messaging");
+  const serviceAccountEnv = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
+  
+  if (serviceAccountEnv) {
+    console.log("Firebase Admin initialized with Service Account from env");
+    const serviceAccount = JSON.parse(serviceAccountEnv);
+    admin.initializeApp({
+      credential: admin.credential.cert(serviceAccount),
+      projectId: "tensile-lens-l8gvj",
+    });
+  } else {
+    // Fallback to project Id only (will use Application Default Credentials, 
+    // which may not have permissions for tensile-lens-l8gvj)
+    console.warn("⚠️ FIREBASE_SERVICE_ACCOUNT_KEY not found in .env. Identity Toolkit API calls may fail.");
+    admin.initializeApp({
+      projectId: "tensile-lens-l8gvj",
+    });
+  }
 } catch (e) {
   console.error("Firebase Admin initialization error:", e);
 }

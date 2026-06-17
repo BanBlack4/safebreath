@@ -1,0 +1,46 @@
+version: "3.8"
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: safebreath-app:latest
+    container_name: safebreath-web-app
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      # Change this to your Supabase credentials or local DB connection string
+      - DATABASE_URL=postgresql://postgres:postgres@db:5432/safebreath?schema=public
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - FIREBASE_SERVICE_ACCOUNT_KEY=${FIREBASE_SERVICE_ACCOUNT_KEY}
+    depends_on:
+      db:
+        condition: service_healthy
+
+  # Local Postgres database container (for fully offline/on-premise setups)
+  # If connecting directly to cloud Supabase, you can remove this service and change DATABASE_URL above to Supabase's URI
+  db:
+    image: postgres:15-alpine
+    container_name: safebreath-db
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: safebreath
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d safebreath"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:
