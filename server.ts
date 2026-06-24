@@ -1,0 +1,114 @@
+import { setupTracing } from './server/observability/tracing';
+setupTracing();
+
+import { NestFactory } from '@nestjs/core';
+import { ExpressAdapter } from '@nestjs/platform-express';
+import { WsAdapter } from '@nestjs/platform-ws';
+import { AppModule } from './server/nest-scaffold/app.module';
+
+import express from "express";
+import path from "path";
+import { createServer as createViteServer } from "vite";
+import dotenv from "dotenv";
+import apiRoutes from "./server/routes/index";
+import { errorHandler } from "./server/middlewares/errorHandler";
+import cors from "cors";
+import { registerEventConsumers } from "./server/events";
+
+dotenv.config();
+import admin from 'firebase-admin';
+
+import geminiRoutes from "./server/routes/gemini";
+import firebaseRoutes from "./server/routes/firebase";
+
+dotenv.config();
+
+// Initialize Firebase Admin for Firebase Cloud Messaging (FCM) and Auth
+// Required for sending Push Notifications and assigning custom claims
+/*try {
+  const serviceAccountEnv = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
+  
+  if (serviceAccountEnv) {
+    console.log("Firebase Admin initialized with Service Account from env");
+    const serviceAccount = JSON.parse(serviceAccountEnv);
+    admin.initializeApp({
+      credential: admin.credential.cert(serviceAccount),
+      projectId: "tensile-lens-l8gvj",
+    });
+  } else {
+    // Fallback to project Id only (will use Application Default Credentials, 
+    // which may not have permissions for tensile-lens-l8gvj)
+    console.warn("⚠️ FIREBASE_SERVICE_ACCOUNT_KEY not found in .env. Identity Toolkit API calls may fail.");
+    admin.initializeApp({
+      projectId: "tensile-lens-l8gvj",
+    });
+  }
+} catch (e) {
+  console.error("Firebase Admin initialization error:", e);
+}
+*/
+async function startServer() {
+  const app = express();
+  const PORT = 3000;
+
+  // CORS & JSON body parser
+  app.use(cors());
+  app.use(express.json());
+
+  // Use modular routers
+  app.use('/api', apiRoutes); // Our new scalable abstraction
+  app.use('/api/gemini', geminiRoutes);
+  app.use('/api/firebase', firebaseRoutes);
+
+  // Serve static assets / development routes with Vite
+  if (process.env.NODE_ENV !== "production") {
+    const vite = await createViteServer({
+      server: { middlewareMode: true },
+      appType: "spa",
+    });
+    app.use(vite.middlewares);
+  } else {
+    const distPath = path.join(process.cwd(), 'dist');
+    app.use(express.static(distPath));
+    app.get('*all', (req, res) => {
+      res.sendFile(path.join(distPath, 'index.html'));
+    });
+  }
+
+  // Global Error Handler
+  app.use(errorHandler);
+
+  // Initialize Internal Event Consumers
+  registerEventConsumers();
+
+  console.log('Bootstrapping Hybrid NestJS Runtime...');
+  const nestApp = await NestFactory.create(AppModule, new ExpressAdapter(app));
+  nestApp.useWebSocketAdapter(new WsAdapter(nestApp));
+  nestApp.enableShutdownHooks();
+  await nestApp.init();
+
+  // Create HTTP server attached to express app
+  const server = app.listen(PORT, "0.0.0.0", () => {
+    console.log(`Node-Express-NestJS Hybrid Server running on http://localhost:${PORT}`);
+  });
+
+  // Attach WebSocket server for real-time telemetry Pipeline
+  const { setupWebSocketServer } = await import('./server/ws/telemetry.handler');
+  setupWebSocketServer(server);
+
+  // Graceful Shutdown for Kubernetes (SIGTERM)
+  process.on('SIGTERM', async () => {
+    console.log('[Orchestrator] SIGTERM received. Initiating graceful shutdown...');
+    // Stop NestJS Modules
+    await nestApp.close();
+    
+    // Stop accepting new connections on raw Express/ws layer
+    server.close(() => {
+      console.log('[Orchestrator] Legacy HTTP server closed.');
+      // Exit cleanly after buffers flush and connections close
+      process.exit(0);
+    });
+  });
+}
+
+startServer();

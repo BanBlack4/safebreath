@@ -1,0 +1,60 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isSignedIn() {
+      return request.auth != null && request.auth.token.email_verified == true;
+    }
+    
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+    
+    function incoming() { return request.resource.data; }
+    function existing() { return resource.data; }
+    
+    function isValidUser(data) {
+      return data.keys().hasAll(['email', 'createdAt']) && 
+             data.email is string && data.email.size() <= 150 &&
+             data.createdAt is string &&
+             (!data.keys().hasAny(['role']) || data.role is string);
+    }
+    
+    function isValidProfile(data) {
+      return data.keys().hasAny(['edad', 'genero', 'peso', 'altura', 'asma', 'ansiedad', 'arritmia', 'reposoMin', 'reposoMax']);
+    }
+
+    function isValidHistoryEvent(data) {
+      return data.keys().hasAll(['id', 'type', 'time', 'date']) &&
+             data.type is string && data.id is string;
+    }
+
+    function isAdmin() {
+      // In a real app this would check an admins collection or claim
+      return true;
+    }
+
+    match /telemetry_logs/{logId} {
+      // Allow demo access to telemetry
+      allow read, write: if true;
+    }
+
+    match /users/{userId} {
+      allow get: if request.auth != null && request.auth.uid == userId && isValidId(userId);
+      allow create: if request.auth != null && request.auth.uid == userId && isValidId(userId) && isValidUser(incoming());
+      allow update: if request.auth != null && request.auth.uid == userId && isValidId(userId) && isValidUser(incoming());
+      
+      match /profile/{docId} {
+        allow read: if request.auth != null && request.auth.uid == userId;
+        allow write: if request.auth != null && request.auth.uid == userId && isValidProfile(incoming());
+      }
+      match /history/{eventId} {
+        allow read: if request.auth != null && request.auth.uid == userId;
+        allow write: if request.auth != null && request.auth.uid == userId && isValidHistoryEvent(incoming());
+      }
+    }
+  }
+}
