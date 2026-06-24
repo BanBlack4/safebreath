@@ -24,9 +24,7 @@ import { useAppSettingsStore } from "../store/useAppSettingsStore";
 import { UserProfile, EmergencyContact } from "../types";
 import { toast } from "react-hot-toast";
 import { insertHealthEvent } from "../services/supabaseData";
-
-// 1. IMPORTAMOS SUPABASE
-import { supabase } from "../lib/supabase";
+import { auth } from "../firebase";
 
 interface CalmInterventionScreenProps {
   profile: UserProfile;
@@ -290,13 +288,11 @@ export default function CalmInterventionScreen({
     }
   }, [phase, contactsKey]);
 
-  // 2. ADAPTAMOS LA INSERCIÓN A SUPABASE (Asíncrono y usa .id)
-  const handleCompleteBreathing = async () => {
-    const { data: { user } } = await supabase.auth.getUser();
+  const handleCompleteBreathing = () => {
+    const user = auth.currentUser;
     if (!user) return;
-    
     insertHealthEvent(
-      user.id,
+      user.uid,
       "Respiración Completada",
       "calm_intervention",
       "El usuario completó un ejercicio de respiración guiada para disminuir agitación.",
@@ -304,24 +300,19 @@ export default function CalmInterventionScreen({
     ).catch((e) => console.error("Error insertando log de intervención:", e));
   };
 
-  // 3. ADAPTAMOS EL EFECTO DE SOS A SUPABASE
   useEffect(() => {
-    const logSOS = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
+    const user = auth.currentUser;
+    if (!user) return;
 
-      if (phase === "sos_dispatch") {
-        insertHealthEvent(
-          user.id,
-          "S.O.S. Activado",
-          "sos_dispatch",
-          "Protocolo de emergencia activado desde el dispositivo móvil.",
-          "Emergencia",
-        ).catch((e) => console.error("Error insertando log de SOS:", e));
-      }
-    };
-    
-    logSOS();
+    if (phase === "sos_dispatch") {
+      insertHealthEvent(
+        user.uid,
+        "S.O.S. Activado",
+        "sos_dispatch",
+        "Protocolo de emergencia activado desde el dispositivo móvil.",
+        "Emergencia",
+      ).catch((e) => console.error("Error insertando log de SOS:", e));
+    }
   }, [phase]);
 
   const bgStyle = nightMode

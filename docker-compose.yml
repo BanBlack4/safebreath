@@ -5,21 +5,25 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: safebreath-app-dev:latest
-    container_name: safebreath-web-app-dev
+    image: safebreath-app:latest
+    container_name: safebreath-web-app
     ports:
       - "3000:3000"
-      - "5173:5173"
     environment:
       - NODE_ENV=production
       - PORT=3000
+      # Change this to your Supabase credentials or local DB connection string
       - DATABASE_URL=postgresql://postgres:postgres@db:5432/safebreath?schema=public
-    # Ejecutamos directamente el archivo compilado de producción
-    command: node dist/server.cjs
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - FIREBASE_SERVICE_ACCOUNT_KEY=${FIREBASE_SERVICE_ACCOUNT_KEY}
     depends_on:
       db:
         condition: service_healthy
 
+  # Local Postgres database container (for fully offline/on-premise setups)
+  # If connecting directly to cloud Supabase, you can remove this service and change DATABASE_URL above to Supabase's URI
   db:
     image: postgres:15-alpine
     container_name: safebreath-db

@@ -25,7 +25,7 @@ dotenv.config();
 
 // Initialize Firebase Admin for Firebase Cloud Messaging (FCM) and Auth
 // Required for sending Push Notifications and assigning custom claims
-/*try {
+try {
   const serviceAccountEnv = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
   
   if (serviceAccountEnv) {
@@ -46,7 +46,7 @@ dotenv.config();
 } catch (e) {
   console.error("Firebase Admin initialization error:", e);
 }
-*/
+
 async function startServer() {
   const app = express();
   const PORT = 3000;

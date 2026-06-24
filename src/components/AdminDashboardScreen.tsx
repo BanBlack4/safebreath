@@ -33,9 +33,6 @@ import {
   Download
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
-
-// 1. IMPORTAMOS LAS NUEVAS FUNCIONES DE SERVICIO 
-// (Asegúrate de que estas funciones existan en services/firestore.ts o en tu nuevo servicio)
 import { fetchAllTelemetryData, populateMockTelemetryData } from '../services/firestore';
 
 interface AdminDashboardScreenProps {
@@ -73,7 +70,6 @@ export default function AdminDashboardScreen({ onBack }: AdminDashboardScreenPro
   const loadRealTelemetry = async () => {
     setIsFetching(true);
     try {
-      // Llamada al servicio (debe estar implementada en tu nuevo archivo supabase)
       const data = await fetchAllTelemetryData();
       if (data && data.length > 0) {
         setUserCohort(data);
@@ -180,13 +176,12 @@ export default function AdminDashboardScreen({ onBack }: AdminDashboardScreenPro
   // Add random simulated cohort patient to showcase responsiveness
   const handleAddCohortSample = async () => {
     toast.loading("Generando datos simulados en base de datos...", { id: "populating" });
-    // Llamada al servicio (debe estar implementada en tu nuevo archivo supabase)
     const newLogs = await populateMockTelemetryData(5);
     if (newLogs && newLogs.length > 0) {
       setUserCohort(prev => [...newLogs, ...prev]);
       toast.success(`Añadidos ${newLogs.length} pacientes al cohorte preventivo en BD`, { id: "populating" });
     } else {
-      toast.error("Error al poblar BD.", { id: "populating" });
+      toast.error("Error al poblar BD. La base de datos requiere configuración Firebase.", { id: "populating" });
     }
   };
 
@@ -225,6 +220,232 @@ export default function AdminDashboardScreen({ onBack }: AdminDashboardScreenPro
     document.body.removeChild(link);
     
     toast.success("Exportado exitosamente para Excel / Power BI");
+  };
+
+  const exportDatabaseToRealtimeDB = async () => {
+    const loadToast = toast.loading("Preparando exportación completa de Firestore...");
+    try {
+      const { db, auth } = await import('../firebase');
+      const { collection, getDocs, doc, getDoc, getDocFromCache, getDocsFromCache } = await import('firebase/firestore');
+      
+      const safeGetDoc = async (docRef: any) => {
+        try {
+          return await getDoc(docRef);
+        } catch (err: any) {
+          console.warn("safeGetDoc failed to get from server, trying cache...", err.message);
+          try {
+            return await getDocFromCache(docRef);
+          } catch (cacheErr: any) {
+            console.error("safeGetDoc from cache also failed:", cacheErr.message);
+            return null;
+          }
+        }
+      };
+
+      const safeGetDocs = async (collRef: any) => {
+        try {
+          return await getDocs(collRef);
+        } catch (err: any) {
+          console.warn("safeGetDocs failed to get from server, trying cache...", err.message);
+          try {
+            return await getDocsFromCache(collRef);
+          } catch (cacheErr: any) {
+            console.error("safeGetDocs from cache also failed:", cacheErr.message);
+            return null;
+          }
+        }
+      };
+
+      const rtdbStructure: any = {};
+
+      // 1. Export telemetry_logs
+      try {
+        const telemetrySnap = await safeGetDocs(collection(db, 'telemetry_logs'));
+        if (telemetrySnap && !telemetrySnap.empty) {
+          const telemetryLogs: any = {};
+          telemetrySnap.forEach(docSnap => {
+            telemetryLogs[docSnap.id] = docSnap.data();
+          });
+          rtdbStructure['telemetry_logs'] = telemetryLogs;
+        }
+      } catch (err: any) {
+        console.warn("Could not export telemetry_logs collection:", err.message);
+      }
+
+      // 2. Export global_alerts
+      try {
+        const snap = await safeGetDocs(collection(db, 'global_alerts'));
+        if (snap && !snap.empty) {
+          const dict: any = {};
+          snap.forEach(docSnap => { dict[docSnap.id] = docSnap.data(); });
+          rtdbStructure['global_alerts'] = dict;
+        }
+      } catch (e) {}
+
+      // 3. Export alert_logs
+      try {
+        const snap = await safeGetDocs(collection(db, 'alert_logs'));
+        if (snap && !snap.empty) {
+          const dict: any = {};
+          snap.forEach(docSnap => { dict[docSnap.id] = docSnap.data(); });
+          rtdbStructure['alert_logs'] = dict;
+        }
+      } catch (e) {}
+
+      // 4. Export registered_devices
+      try {
+        const snap = await safeGetDocs(collection(db, 'registered_devices'));
+        if (snap && !snap.empty) {
+          const dict: any = {};
+          snap.forEach(docSnap => { dict[docSnap.id] = docSnap.data(); });
+          rtdbStructure['registered_devices'] = dict;
+        }
+      } catch (e) {}
+
+      // 5. Export authenticated user's data
+      if (auth.currentUser) {
+        const userId = auth.currentUser.uid;
+        const userDocRef = doc(db, 'users', userId);
+        
+        const userData: any = {};
+        try {
+          const userSnap = await safeGetDoc(userDocRef);
+          if (userSnap && userSnap.exists()) {
+            Object.assign(userData, userSnap.data());
+          } else {
+            userData.email = auth.currentUser.email || '';
+            userData.createdAt = new Date().toISOString();
+          }
+        } catch (e: any) {
+          console.warn("Could not fetch root user document:", e.message);
+          userData.email = auth.currentUser.email || '';
+          userData.createdAt = new Date().toISOString();
+        }
+
+        // Fetch user subcollections: 'profile'
+        try {
+          const profileSnap = await safeGetDocs(collection(db, `users/${userId}/profile`));
+          if (profileSnap && !profileSnap.empty) {
+            const profileData: any = {};
+            profileSnap.forEach(pDoc => {
+              profileData[pDoc.id] = pDoc.data();
+            });
+            userData['profile'] = profileData;
+          }
+        } catch (err: any) {
+          console.warn("Could not export profile subcollection:", err.message);
+        }
+
+        // Fetch user subcollections: 'history'
+        try {
+          const historySnap = await safeGetDocs(collection(db, `users/${userId}/history`));
+          if (historySnap && !historySnap.empty) {
+            const historyData: any = {};
+            historySnap.forEach(hDoc => {
+              historyData[hDoc.id] = hDoc.data();
+            });
+            userData['history'] = historyData;
+          }
+        } catch (err: any) {
+          console.warn("Could not export history subcollection:", err.message);
+        }
+
+        // Fetch user subcollections: 'telemetry'
+        try {
+          const telemetrySnap = await safeGetDocs(collection(db, `users/${userId}/telemetry`));
+          if (telemetrySnap && !telemetrySnap.empty) {
+            const teleData: any = {};
+            telemetrySnap.forEach(tDoc => {
+              teleData[tDoc.id] = tDoc.data();
+            });
+            userData['telemetry'] = teleData;
+          }
+        } catch (err: any) {
+          console.warn("Could not export telemetry subcollection:", err.message);
+        }
+
+        // Build users branch
+        rtdbStructure['users'] = {
+          [userId]: userData
+        };
+      }
+
+      // 6. Support potentially listing root users if authorized
+      try {
+        const usersSnap = await safeGetDocs(collection(db, 'users'));
+        if (usersSnap && !usersSnap.empty) {
+          if (!rtdbStructure['users']) rtdbStructure['users'] = {};
+          for (const userDoc of usersSnap.docs) {
+            const userId = userDoc.id;
+            if (!rtdbStructure['users'][userId]) rtdbStructure['users'][userId] = {};
+            Object.assign(rtdbStructure['users'][userId], userDoc.data());
+
+            try {
+              const subP = await safeGetDocs(collection(db, `users/${userId}/profile`));
+              if (subP && !subP.empty) {
+                const pData: any = {};
+                subP.forEach(d => { pData[d.id] = d.data(); });
+                rtdbStructure['users'][userId]['profile'] = pData;
+              }
+            } catch (pErr) {}
+
+            try {
+              const subH = await safeGetDocs(collection(db, `users/${userId}/history`));
+              if (subH && !subH.empty) {
+                const hData: any = {};
+                subH.forEach(d => { hData[d.id] = d.data(); });
+                rtdbStructure['users'][userId]['history'] = hData;
+              }
+            } catch (hErr) {}
+
+            try {
+              const subT = await safeGetDocs(collection(db, `users/${userId}/telemetry`));
+              if (subT && !subT.empty) {
+                const tData: any = {};
+                subT.forEach(d => { tData[d.id] = d.data(); });
+                rtdbStructure['users'][userId]['telemetry'] = tData;
+              }
+            } catch (tErr) {}
+          }
+        }
+      } catch (err) {
+        // Skip if users list-read not allowed by security rules
+      }
+
+      // If absolutely no data could be retrieved (empty database)
+      const hasUserData = rtdbStructure.users && Object.keys(rtdbStructure.users).length > 0;
+      const isActuallyEmpty = Object.keys(rtdbStructure).length === 0 || 
+        (hasUserData && Object.keys(rtdbStructure.users).every((k: string) => Object.keys(rtdbStructure.users[k] || {}).length === 0));
+
+      if (isActuallyEmpty) {
+        toast.error("No se pudo obtener ningún dato de la base de datos (¿estás desconectado y sin caché?).", { id: loadToast });
+        return;
+      }
+
+      // Clean up Firestore Timestamp descriptors inside nested objects
+      const cleanData = JSON.parse(JSON.stringify(rtdbStructure, (key, value) => {
+        if (value && typeof value === 'object' && value.seconds !== undefined) {
+          return new Date(value.seconds * 1000).toISOString();
+        }
+        return value;
+      }));
+
+      // Trigger download
+      const jsonString = `data:text/json;charset=utf-8,${encodeURIComponent(
+        JSON.stringify(cleanData, null, 2)
+      )}`;
+      const downloadAnchor = document.createElement('a');
+      downloadAnchor.setAttribute('href', jsonString);
+      downloadAnchor.setAttribute('download', 'firestore-to-realtime-db-import.json');
+      document.body.appendChild(downloadAnchor);
+      downloadAnchor.click();
+      downloadAnchor.remove();
+
+      toast.success("¡Base de datos exportada con éxito!", { id: loadToast });
+    } catch (e: any) {
+      console.error("Export error:", e);
+      toast.error("Error al exportar: " + e.message, { id: loadToast });
+    }
   };
 
   const handleAiAnalysis = async () => {
@@ -589,6 +810,14 @@ export default function AdminDashboardScreen({ onBack }: AdminDashboardScreenPro
           >
             <Download className="w-3.5 h-3.5" />
             Exportar Cohorte a CSV (Excel / Power BI)
+          </button>
+
+          <button
+            onClick={exportDatabaseToRealtimeDB}
+            className="w-full bg-amber-600 hover:bg-amber-700 text-white text-[11px] font-bold px-3.5 py-2.5 rounded-xl shadow-xs active:scale-95 transition flex justify-center items-center gap-1.5 cursor-pointer mt-1"
+          >
+            <Database className="w-3.5 h-3.5" />
+            Descargar Base de Datos Completa (JSON para Realtime DB)
           </button>
           
           <button

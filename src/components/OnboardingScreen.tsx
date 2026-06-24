@@ -1,9 +1,8 @@
 import React, { useState } from 'react';
-import { motion } from 'motion/react';
-import { Heart, LogIn, Mail, Lock } from 'lucide-react';
-
-// 1. IMPORTAMOS SUPABASE
-import { supabase } from '../lib/supabase'; // Ajusta la ruta si es necesario
+import { motion, AnimatePresence } from 'motion/react';
+import { Heart, User, LogIn, Mail, Lock } from 'lucide-react';
+import { signInWithRedirect, getRedirectResult, GoogleAuthProvider, createUserWithEmailAndPassword, signInWithEmailAndPassword } from 'firebase/auth';
+import { auth } from '../firebase';
 import { toast } from 'react-hot-toast';
 
 interface OnboardingScreenProps {
@@ -17,22 +16,30 @@ export default function OnboardingScreen({ onComplete }: OnboardingScreenProps) 
   const [password, setPassword] = useState('');
   const [isRegistering, setIsRegistering] = useState(false);
 
-  // NOTA: Con Supabase, si el inicio de sesión de Google fue exitoso,
-  // el cambio de estado se detectará automáticamente en App.tsx (en el onAuthStateChange)
-  // por lo que no necesitamos el 'checkRedirect' que tenías en Firebase.
+  React.useEffect(() => {
+    const checkRedirect = async () => {
+      try {
+        const result = await getRedirectResult(auth);
+        if (result) {
+          toast.success('Sesión iniciada con Google');
+          onComplete();
+        }
+      } catch (err: any) {
+        console.error("Redirect auth error:", err);
+        setError(err.message || 'Error al iniciar sesión.');
+        toast.error('Error al iniciar sesión con Google');
+      }
+    };
+    checkRedirect();
+  }, [onComplete]);
 
   const handleGoogleLogin = async () => {
     setIsLoading(true);
     setError('');
+    const provider = new GoogleAuthProvider();
+    // Use redirect to avoid popup blockers on mobile devices (e.g. auth/popup-closed-by-user on iOS)
     try {
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: {
-          // Si tienes tu frontend corriendo local, redigirá allí por defecto.
-          // En producción, asegúrate de configurar las URL permitidas en el dashboard de Supabase.
-        }
-      });
-      if (error) throw error;
+      await signInWithRedirect(auth, provider);
     } catch (err: any) {
       console.error(err);
       setError(err.message || 'Error al iniciar sesión.');
@@ -52,32 +59,19 @@ export default function OnboardingScreen({ onComplete }: OnboardingScreenProps) 
     setError('');
     try {
       if (isRegistering) {
-        // REGISTRO CON SUPABASE
-        const { error } = await supabase.auth.signUp({
-          email,
-          password,
-        });
-        if (error) throw error;
-        // NOTA: Si tienes activada la confirmación por email en Supabase,
-        // el usuario no será "logueado" inmediatamente.
-        toast.success('Cuenta creada. Por favor, revisa tu correo para confirmar.');
+        await createUserWithEmailAndPassword(auth, email, password);
+        toast.success('Cuenta creada exitosamente');
       } else {
-        // LOGIN CON SUPABASE
-        const { error } = await supabase.auth.signInWithPassword({
-          email,
-          password,
-        });
-        if (error) throw error;
+        await signInWithEmailAndPassword(auth, email, password);
         toast.success('Sesión iniciada correctamente');
-        onComplete();
       }
+      onComplete();
     } catch (err: any) {
       console.error(err);
       let msg = 'Error en la autenticación.';
-      // Mapeo básico de errores comunes de Supabase
-      if (err.message.includes('already registered')) msg = 'El correo ya está en uso.';
-      if (err.message.includes('Invalid login credentials')) msg = 'Credenciales inválidas.';
-      if (err.message.includes('Password should be')) msg = 'La contraseña es muy débil (mín. 6 caracteres).';
+      if (err.code === 'auth/email-already-in-use') msg = 'El correo ya está en uso. Si usaste Google anteriormente, inicia sesión con Google.';
+      if (err.code === 'auth/wrong-password' || err.code === 'auth/user-not-found' || err.code === 'auth/invalid-credential') msg = 'Credenciales inválidas.';
+      if (err.code === 'auth/weak-password') msg = 'La contraseña es muy débil (mín. 6 caracteres).';
       setError(msg);
       toast.error(msg);
     } finally {

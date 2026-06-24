@@ -60,7 +60,7 @@ export function setupWebSocketServer(server: any) {
       console.log('[WS] Client attempting connection');
 
     // 1. WebSocket Authentication
-    /*const url = new URL(req.url || '', `http://${req.headers.host}`);
+    const url = new URL(req.url || '', `http://${req.headers.host}`);
     const token = url.searchParams.get('token');
 
     if (!token) {
@@ -68,10 +68,9 @@ export function setupWebSocketServer(server: any) {
       ws.close(1008, 'Token required');
       return;
     }
-*/
-    let userId: string = "usuario_debug_123"; 
-    console.log(`[WS] Bypass de seguridad activo. Conectado como: ${userId}`);
-    /*try {
+
+    let userId: string;
+    try {
       const decoded: any = jwt.verify(token, JWT_SECRET);
       userId = decoded.userId;
       console.log(`[WS] Authenticated successfully for user: ${userId}`);
@@ -80,7 +79,7 @@ export function setupWebSocketServer(server: any) {
       ws.close(1008, 'Invalid token');
       return;
     }
-*/
+
     // 2. Incoming Message Handler Pipeline
     ws.on('message', (message: string) => {
       try {

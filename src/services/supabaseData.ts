@@ -29,17 +29,16 @@ export const fetchHealthHistory = async (userId: string): Promise<HealthEvent[]>
 
 export const fetchUserInsight = async (userId: string) => {
   if (!userId) return null;
-  
-  // Solución al Error 406: .maybeSingle()
   const { data, error } = await supabase
     .from('user_insights')
     .select('*')
     .eq('user_id', userId)
     .order('created_at', { ascending: false })
     .limit(1)
-    .maybeSingle(); 
+    .single();
 
-  if (error) {
+  if (error && error.code !== 'PGRST116') {
+    // PGRST116 means no rows returned, which is fine
     console.error('Error fetching user insight:', error);
   }
 
@@ -71,7 +70,7 @@ export const insertHealthEvent = async (
           details: details || {}
       })
       .select()
-      .maybeSingle();
+      .single();
 
   if (error) {
       console.error('Error inserting health event:', error);
@@ -107,7 +106,7 @@ export const insertManualLog = async (
           details: { bpm, spo2, mood, activity: activity || 'Ninguna especificada' }
       })
       .select()
-      .maybeSingle();
+      .single();
 
   if (error) {
       console.error('Error inserting manual log:', error);

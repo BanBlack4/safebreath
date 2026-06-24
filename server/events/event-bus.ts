@@ -3,12 +3,11 @@ import { DomainEvents } from './domain-events';
 import { metrics } from '../observability/metrics';
 import { logger } from '../observability/logger';
 import { dlq } from '../resilience/dlq.service';
-// 1. Agregamos la importación aquí arriba de forma correcta
-import { traceContextStorage } from '../observability/tracing';
 
 /**
  * Internal Event Bus Application Facade
- * * Abstracts Node.js EventEmitter to provide a unified pub/sub interface.
+ * 
+ * Abstracts Node.js EventEmitter to provide a unified pub/sub interface.
  * Implements Backpressure through Bounded Queues to prevent Memory Out of Bounds (OOM).
  */
 class AppEventBus {
@@ -38,17 +37,13 @@ class AppEventBus {
     this.currentInFlightEvents++;
     metrics.setGauge('event_bus_queue_depth', this.currentInFlightEvents);
 
-    // 2. Usamos el objeto importado en lugar de require()
-    const traceCtx = traceContextStorage.getStore();
+    // Capture the existing context before jumping event loop queue
+    const traceCtx = require('../observability/tracing').traceContextStorage.getStore();
 
     setImmediate(() => {
-      if (traceCtx) {
-        traceContextStorage.run(traceCtx, () => {
-          this.emitter.emit(eventName, payload);
-        });
-      } else {
+      require('../observability/tracing').traceContextStorage.run(traceCtx || {}, () => {
         this.emitter.emit(eventName, payload);
-      }
+      });
     });
   }
 

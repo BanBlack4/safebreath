@@ -20,15 +20,12 @@ import HistoryScreen from './components/HistoryScreen';
 import EventDetailScreen from './components/EventDetailScreen';
 import { AppScreen, UserProfile, ConnectedDevice, UserRole } from './types';
 import { motion, AnimatePresence } from 'motion/react';
-import { Activity } from 'lucide-react';
+import { Heart, Activity, CheckCircle, Smartphone } from 'lucide-react';
+import { onAuthStateChanged, User, signOut } from 'firebase/auth';
+import { auth, db } from './firebase';
+import { doc, getDoc, setDoc, writeBatch, collection, getDocs } from 'firebase/firestore';
+import { syncProfileToFirestore, getProfileFromFirestore } from './services/firestore';
 import { Toaster, toast } from 'react-hot-toast';
-
-// 1. IMPORTAMOS SUPABASE
-import { supabase } from './lib/supabase';
-import { User } from '@supabase/supabase-js';
-
-// Importamos las funciones simuladas (temporalmente)
-import { syncProfileToFirestore, getProfileFromFirestore } from "./services/firestore";
 
 const LOCAL_STORAGE_PROFILE_KEY = 'safebreath_user_profile_data';
 
@@ -168,21 +165,19 @@ export default function App() {
       localStorage.setItem('safebreath_connected_devices', JSON.stringify(newDevices));
     } catch (e) {}
     
-    // [TODO SUPABASE]: Aquí implementaremos la actualización de dispositivos en la BD
-    /*
-    if (user) {
+    if (auth.currentUser) {
       try {
-        const { error } = await supabase
-          .from('user_devices')
-          .upsert(newDevices.map(d => ({ ...d, user_id: user.id })));
-        if (error) throw error;
+        const batch = writeBatch(db);
+        newDevices.forEach(device => {
+          const deviceRef = doc(db, 'users', auth.currentUser!.uid, 'devices', device.id);
+          batch.set(deviceRef, device, { merge: true });
+        });
+        await batch.commit();
       } catch (e) {
-        console.warn("Failed to sync devices to Supabase:", e);
+        console.warn("Failed to sync devices to Firestore:", e);
       }
     }
-    */
   };
-  
   const [lastBpm, setLastBpm] = useState(72);
   const [lastTime, setLastTime] = useState("Hoy, 24 de Mayo • 11:05 AM");
   const [user, setUser] = useState<User | null>(null);
@@ -236,69 +231,73 @@ export default function App() {
 
   const [userRole, setUserRole] = useState<UserRole>('user');
 
-  // 2. NUEVA LÓGICA DE AUTENTICACIÓN CON SUPABASE
   useEffect(() => {
-    // Obtenemos la sesión actual al cargar
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user ?? null);
+    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+      setUser(currentUser);
       setIsAuthLoading(false);
-      if(session?.user) {
-          checkAndInitUser(session.user);
-      }
-    });
-
-    // Escuchamos los cambios en tiempo real
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null);
-      setIsAuthLoading(false);
-      if(session?.user) {
-          checkAndInitUser(session.user);
-      }
-    });
-
-    return () => subscription.unsubscribe();
-  }, []);
-
-  const checkAndInitUser = async (currentUser: User) => {
-    // [TODO SUPABASE]: Lógica de sincronización de usuario
-    // Como aún no tienes las tablas creadas, esto está comentado para evitar errores.
-    /*
-    try {
-      const { data: userDoc, error } = await supabase
-        .from('users')
-        .select('*')
-        .eq('id', currentUser.id)
-        .single();
-
-      if (error || !userDoc) {
-        // Usuario nuevo
-        await supabase.from('users').insert([{ id: currentUser.id, email: currentUser.email, role: 'user' }]);
-        setShowTutorial(true);
-        setUserRole('user');
-      } else {
-        // Usuario existente
-        setUserRole((userDoc.role as UserRole) || 'user');
+      
+      if (currentUser) {
+        // Sync User Doc
+        try {
+          const userRef = doc(db, 'users', currentUser.uid);
+          const userDoc = await getDoc(userRef);
+          if (!userDoc.exists()) {
+            await setDoc(userRef, { email: currentUser.email, createdAt: new Date().toISOString(), role: 'user' });
+            setShowTutorial(true);
+            setUserRole('user');
+          } else {
+            const data = userDoc.data();
+            setUserRole((data?.role as UserRole) || 'user');
+            
+            // Sync initial devices if available
+            const devicesSnapshot = await getDocs(collection(db, 'users', currentUser.uid, 'devices'));
+            if (!devicesSnapshot.empty) {
+              const fetchedDevices = devicesSnapshot.docs.map(doc => doc.data() as ConnectedDevice);
+              setDevices(fetchedDevices);
+              try {
+                localStorage.setItem('safebreath_connected_devices', JSON.stringify(fetchedDevices));
+              } catch(e) {}
+            } else if (data?.devices && Array.isArray(data.devices)) {
+              // Fallback to legacy array if it exists
+              setDevices(data.devices);
+              try {
+                localStorage.setItem('safebreath_connected_devices', JSON.stringify(data.devices));
+              } catch(e) {}
+              // Migrate legacy data to subcollection
+              const batch = writeBatch(db);
+              data.devices.forEach((dev: ConnectedDevice) => {
+                const deviceRef = doc(db, 'users', currentUser.uid, 'devices', dev.id);
+                batch.set(deviceRef, dev, { merge: true });
+              });
+              await batch.commit();
+            }
+          }
+        } catch (error: any) {
+          if (error.code !== 'unavailable') {
+            console.warn("Failed to sync user doc:", error.message);
+          }
+        }
         
-        // Cargar dispositivos desde DB...
-      }
-    } catch (error: any) {
-       console.warn("Failed to sync user doc:", error.message);
-    }
-    */
-    
-    // Cargar el perfil local temporalmente (Simulando)
-    const remoteProfile = await getProfileFromFirestore(currentUser.id);
-    if (remoteProfile) {
-      setProfile(remoteProfile);
-      try { localStorage.setItem(LOCAL_STORAGE_PROFILE_KEY, JSON.stringify(remoteProfile)); } catch(e){}
-    } else {
-      syncProfileToFirestore(profile);
-    }
-  };
+        // Log Firebase Token claims (Optional, for debugging)
+        try {
+          let idTokenResult = await currentUser.getIdTokenResult();
+          console.log("🔥 [Firebase Auth] Token claims:", idTokenResult.claims);
+        } catch(e) {
+          console.error("No se pudo obtener token claims", e);
+        }
 
-  const handleSignOut = async () => {
-    await supabase.auth.signOut();
-  };
+        // Load external profile
+        const remoteProfile = await getProfileFromFirestore();
+        if (remoteProfile) {
+          setProfile(remoteProfile);
+          try { localStorage.setItem(LOCAL_STORAGE_PROFILE_KEY, JSON.stringify(remoteProfile)); } catch(e){}
+        } else {
+          syncProfileToFirestore(profile);
+        }
+      }
+    });
+    return () => unsubscribe();
+  }, []);
 
   // Calibrating status bar indicator overlay
   const [isCalibrating, setIsCalibrating] = useState(false);
@@ -335,6 +334,10 @@ export default function App() {
       if (prev === 'light') return 'dark';
       return 'system';
     });
+  };
+
+  const handleSignOut = () => {
+    signOut(auth);
   };
 
   const triggerAlertScreenWithPermission = async () => {

@@ -5,13 +5,12 @@
 
 import { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
-import { Save, AlertCircle, Sparkles, CheckCircle2, LogOut, Database, Phone, Plus, Trash2, Sliders } from 'lucide-react';
+import { Save, AlertCircle, Sparkles, CheckCircle2, LogOut, Database, Phone, Plus, Trash2, Sliders, MessageSquare, Info, Send } from 'lucide-react';
 import { isValidPhoneNumber } from 'libphonenumber-js';
 import { UserProfile, EmergencyContact } from '../types';
+import { auth, db } from '../firebase';
+import { collection, getDocs, doc, getDoc } from 'firebase/firestore';
 import { toast } from 'react-hot-toast';
-
-// 1. IMPORTAMOS SUPABASE (Solo para el nombre de respaldo)
-import { supabase } from '../lib/supabase';
 
 interface HealthProfileScreenProps {
   profile: UserProfile;
@@ -26,9 +25,6 @@ export default function HealthProfileScreen({ profile, onSaveProfile, onSignOut,
   const [genero, setGenero] = useState(profile.genero);
   const [peso, setPeso] = useState<number | string>(profile.peso || '');
   const [altura, setAltura] = useState<number | string>(profile.altura || '');
-
-  // 2. Estado para el nombre de respaldo de Supabase
-  const [fallbackName, setFallbackName] = useState<string | null>(null);
 
   // States for conditions
   const [asma, setAsma] = useState(profile.asma);
@@ -46,15 +42,6 @@ export default function HealthProfileScreen({ profile, onSaveProfile, onSignOut,
   useEffect(() => {
     validate();
   }, [edad, peso, altura, bpmReposo, emergencyContacts]);
-
-  // Buscamos el correo del usuario en Supabase al cargar el componente
-  useEffect(() => {
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      if (user?.email) {
-        setFallbackName(user.email.split('@')[0]);
-      }
-    });
-  }, []);
 
   const validate = (): boolean => {
     const errs: Record<string, string> = {};
@@ -184,7 +171,7 @@ export default function HealthProfileScreen({ profile, onSaveProfile, onSignOut,
         <div className="flex justify-between items-start">
           <div>
             <h2 className="text-2xl font-bold text-[#071e27] dark:text-white">
-              {profile.name ? `Perfil de ${profile.name}` : (fallbackName ? `Perfil de ${fallbackName}` : 'Perfil de Salud')}
+              {profile.name ? `Perfil de ${profile.name}` : (auth.currentUser?.displayName ? `Perfil de ${auth.currentUser.displayName.split(' ')[0]}` : 'Perfil de Salud')}
             </h2>
             <p className="text-sm text-gray-500 dark:text-gray-400">
               Personaliza tu experiencia para una detección más precisa.

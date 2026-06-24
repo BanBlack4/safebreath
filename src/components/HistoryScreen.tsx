@@ -10,9 +10,7 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 import { UserProfile, HealthEvent } from '../types';
 import { fetchHealthHistory, fetchUserInsight, insertManualLog } from '../services/supabaseData';
 import { toast } from 'react-hot-toast';
-
-// 1. IMPORTAMOS SUPABASE
-import { supabase } from '../lib/supabase';
+import { auth } from '../firebase';
 
 interface HistoryScreenProps {
   profile: UserProfile;
@@ -36,16 +34,15 @@ export default function HistoryScreen({ profile, onEventSelect, onScreenChange }
 
   useEffect(() => {
     const loadData = async () => {
-      // 2. OBTENEMOS EL USUARIO DESDE SUPABASE
-      const { data: { user } } = await supabase.auth.getUser();
+      const user = auth.currentUser;
       if (!user) return;
       
-      const history = await fetchHealthHistory(user.id);
+      const history = await fetchHealthHistory(user.uid);
       if (history.length > 0) {
         setEvents(history);
       }
       
-      const insight = await fetchUserInsight(user.id);
+      const insight = await fetchUserInsight(user.uid);
       if (insight) {
         setInsightText(insight.insight_text);
       } else {
@@ -88,8 +85,7 @@ export default function HistoryScreen({ profile, onEventSelect, onScreenChange }
       return;
     }
 
-    // 3. OBTENEMOS EL USUARIO DESDE SUPABASE AL GUARDAR LOG
-    const { data: { user } } = await supabase.auth.getUser();
+    const user = auth.currentUser;
     if (!user) {
       toast.error('Debe iniciar sesión para registrar datos.');
       return;
@@ -97,7 +93,7 @@ export default function HistoryScreen({ profile, onEventSelect, onScreenChange }
 
     try {
       toast.loading('Registrando...', { id: 'manual-log' });
-      const newLog = await insertManualLog(user.id, bpm, spo2, manualMood, manualActivity);
+      const newLog = await insertManualLog(user.uid, bpm, spo2, manualMood, manualActivity);
       
       const newEvent: HealthEvent = {
         id: newLog.id,
