@@ -11,7 +11,7 @@ export function useTelemetry() {
     const connectWebSocket = async () => {
       try {
         // Fetch a real token from our new auth layer
-        const response = await fetch('/api/auth/login', {
+        const response = await fetch(`${import.meta.env.VITE_BACKEND_URL}/api/auth/login`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ email: 'user@safebreath.com', password: 'user123' })
