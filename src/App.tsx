@@ -21,8 +21,8 @@ import EventDetailScreen from './components/EventDetailScreen';
 import { AppScreen, UserProfile, ConnectedDevice, UserRole } from './types';
 import { motion, AnimatePresence } from 'motion/react';
 import { Heart, Activity, CheckCircle, Smartphone } from 'lucide-react';
-import { onAuthStateChanged, User, signOut } from 'firebase/auth';
-import { auth, db } from './firebase';
+
+
 import { doc, getDoc, setDoc, writeBatch, collection, getDocs } from 'firebase/firestore';
 import { syncProfileToFirestore, getProfileFromFirestore } from './services/firestore';
 import { Toaster, toast } from 'react-hot-toast';

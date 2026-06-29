@@ -24,7 +24,7 @@ import { useAppSettingsStore } from "../store/useAppSettingsStore";
 import { UserProfile, EmergencyContact } from "../types";
 import { toast } from "react-hot-toast";
 import { insertHealthEvent } from "../services/supabaseData";
-import { auth } from "../firebase";
+
 
 interface CalmInterventionScreenProps {
   profile: UserProfile;

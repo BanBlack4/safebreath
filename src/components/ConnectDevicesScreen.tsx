@@ -31,8 +31,7 @@ import {
   Save
 } from 'lucide-react';
 import { ConnectedDevice } from '../types';
-import { auth, db } from '../firebase';
-import { doc, setDoc, updateDoc, arrayUnion } from 'firebase/firestore';
+
 
 interface ConnectDevicesScreenProps {
   onBack: () => void;
@@ -1430,7 +1429,7 @@ export default function ConnectDevicesScreen({
                 </div>
                 <div className="space-y-0.5">
                   <p className="font-bold text-gray-805 dark:text-white">¿Qué pasa si cierro la ventana de mi celular?</p>
-                  <p className="text-gray-500 dark:text-gray-400">Nuestro servicio de fondo persiste activo registrando alarmas silenciosas corporales y transmitiendo las pulsaciones directo a la nube Firebase.</p>
+                  <p className="text-gray-500 dark:text-gray-400">Nuestro servicio de fondo persiste activo registrando alarmas silenciosas corporales y transmitiendo las pulsaciones directo a la nube .</p>
                 </div>
               </div>
             </section>

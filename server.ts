@@ -14,38 +14,9 @@ import apiRoutes from "./server/routes/index";
 import { errorHandler } from "./server/middlewares/errorHandler";
 import cors from "cors";
 import { registerEventConsumers } from "./server/events";
-
-dotenv.config();
-import admin from 'firebase-admin';
-
 import geminiRoutes from "./server/routes/gemini";
-import firebaseRoutes from "./server/routes/firebase";
 
 dotenv.config();
-
-// Initialize Firebase Admin for Firebase Cloud Messaging (FCM) and Auth
-// Required for sending Push Notifications and assigning custom claims
-try {
-  const serviceAccountEnv = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
-  
-  if (serviceAccountEnv) {
-    console.log("Firebase Admin initialized with Service Account from env");
-    const serviceAccount = JSON.parse(serviceAccountEnv);
-    admin.initializeApp({
-      credential: admin.credential.cert(serviceAccount),
-      projectId: "tensile-lens-l8gvj",
-    });
-  } else {
-    // Fallback to project Id only (will use Application Default Credentials, 
-    // which may not have permissions for tensile-lens-l8gvj)
-    console.warn("⚠️ FIREBASE_SERVICE_ACCOUNT_KEY not found in .env. Identity Toolkit API calls may fail.");
-    admin.initializeApp({
-      projectId: "tensile-lens-l8gvj",
-    });
-  }
-} catch (e) {
-  console.error("Firebase Admin initialization error:", e);
-}
 
 async function startServer() {
   const app = express();
@@ -56,9 +27,9 @@ async function startServer() {
   app.use(express.json());
 
   // Use modular routers
-  app.use('/api', apiRoutes); // Our new scalable abstraction
+  app.use('/api', apiRoutes); 
   app.use('/api/gemini', geminiRoutes);
-  app.use('/api/firebase', firebaseRoutes);
+  
 
   // Serve static assets / development routes with Vite
   if (process.env.NODE_ENV !== "production") {
@@ -99,13 +70,9 @@ async function startServer() {
   // Graceful Shutdown for Kubernetes (SIGTERM)
   process.on('SIGTERM', async () => {
     console.log('[Orchestrator] SIGTERM received. Initiating graceful shutdown...');
-    // Stop NestJS Modules
     await nestApp.close();
-    
-    // Stop accepting new connections on raw Express/ws layer
     server.close(() => {
       console.log('[Orchestrator] Legacy HTTP server closed.');
-      // Exit cleanly after buffers flush and connections close
       process.exit(0);
     });
   });

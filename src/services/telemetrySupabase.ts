@@ -1,28 +1,37 @@
-import { supabase } from '../lib/supabase';
-import { TelemetryPoint } from '../store/useTelemetryStore';
-import { auth } from '../firebase';
+import { supabase } from '../services/supabaseClient'; // Asegúrate de que la ruta sea correcta
+import { ITelemetryRepository } from '../interfaces/telemetry.repository.interface';
 
-export const syncTelemetryBatch = async (points: TelemetryPoint[]) => {
-  const user = auth.currentUser;
-  if (!user || points.length === 0) return;
+export class SupabaseTelemetryRepository implements ITelemetryRepository {
+  
+  async saveTelemetry(userId: string, data: any): Promise<void> {
+    const { error } = await supabase
+      .from('telemetry')
+      .insert({
+        user_id: userId,
+        ...data,
+        timestamp: new Date().toISOString() // Postgres usa strings ISO para fechas
+      });
 
-  // Optimistic mapping to the user_telemetry schema
-  const rows = points.map(p => ({
-    user_id: user.uid,
-    timestamp: new Date(p.timestamp).toISOString(),
-    bpm: Math.round(p.bpm),
-    spo2: 98, // Mocked for now, can be extracted from point if available
-    hrv: Math.round(p.hrv),
-    stress_level: p.bpm > 100 ? 'elevated' : 'normal',
-    movement_status: 'resting', // Mocked
-    anomaly_detected: p.bpm > 120 || p.bpm < 50
-  }));
-
-  const { error } = await supabase
-    .from('user_telemetry')
-    .insert(rows);
-
-  if (error) {
-    console.error('Error syncing telemetry to Supabase:', error);
+    if (error) {
+      console.error('Error saving telemetry to Supabase:', error);
+      throw error;
+    }
   }
-};
+
+  async getTelemetryHistory(userId: string, startTime: number, endTime: number): Promise<any[]> {
+    const { data, error } = await supabase
+      .from('telemetry')
+      .select('*')
+      .eq('user_id', userId)
+      .gte('timestamp', new Date(startTime).toISOString())
+      .lte('timestamp', new Date(endTime).toISOString())
+      .order('timestamp', { ascending: true });
+
+    if (error) {
+      console.error('Error fetching telemetry from Supabase:', error);
+      return [];
+    }
+
+    return data || [];
+  }
+}

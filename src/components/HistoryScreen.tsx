@@ -10,7 +10,7 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 import { UserProfile, HealthEvent } from '../types';
 import { fetchHealthHistory, fetchUserInsight, insertManualLog } from '../services/supabaseData';
 import { toast } from 'react-hot-toast';
-import { auth } from '../firebase';
+
 
 interface HistoryScreenProps {
   profile: UserProfile;

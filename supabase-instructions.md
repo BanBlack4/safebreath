@@ -3,8 +3,7 @@
 Aquí tienes el resumen de las configuraciones y ajustes que necesitas aplicar en el panel de **Supabase** para que las nuevas pantallas (`HistoryScreen`, `LiveMonitoringScreen`) y la integración que hicimos funcionen correctamente en producción, cubriendo el Advisor Center y la escritura de logs/check-ins.
 
 > **⚠️ SOLUCIÓN AL ERROR DE UUID (Código 22P02)**  
-> Si estás viendo en la consola un error que dice `"invalid input syntax for type uuid: \"...\""`, es porque Firebase usa UIDs de texto (ej. `wPnwn4...`), pero Supabase por defecto crea las columnas `user_id` como tipo `UUID`. Además, la función `auth.uid()` asume que el token tiene un UUID. Para arreglar esto, ejecuta este bloque en el SQL Editor de Supabase:
-
+>
 ```sql
 -- 1. Eliminar TODAS las políticas actuales de las tablas dinámicamente
 -- (PostgreSQL impide cambiar el tipo de una columna si está en uso por una política)
@@ -23,7 +22,7 @@ BEGIN
 END $$;
 
 -- 2. Eliminar las restricciones de llave foránea (Foreign Keys) y Checks restrictivos
--- Como estamos usando Firebase Auth, los IDs (string) no existirán en la tabla auth.users (uuid) de Supabase.
+
 ALTER TABLE public.health_events DROP CONSTRAINT IF EXISTS health_events_user_id_fkey;
 ALTER TABLE public.user_insights DROP CONSTRAINT IF EXISTS user_insights_user_id_fkey;
 ALTER TABLE public.user_telemetry DROP CONSTRAINT IF EXISTS user_telemetry_user_id_fkey;

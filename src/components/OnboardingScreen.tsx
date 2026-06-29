@@ -1,9 +1,8 @@
 import React, { useState } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
-import { Heart, User, LogIn, Mail, Lock } from 'lucide-react';
-import { signInWithRedirect, getRedirectResult, GoogleAuthProvider, createUserWithEmailAndPassword, signInWithEmailAndPassword } from 'firebase/auth';
-import { auth } from '../firebase';
+import { motion } from 'motion/react';
+import { Heart, LogIn, Mail, Lock } from 'lucide-react';
 import { toast } from 'react-hot-toast';
+import { supabase } from '../services/supabaseClient'; // Asegúrate que esta ruta sea correcta
 
 interface OnboardingScreenProps {
   onComplete: () => void;
@@ -16,33 +15,30 @@ export default function OnboardingScreen({ onComplete }: OnboardingScreenProps) 
   const [password, setPassword] = useState('');
   const [isRegistering, setIsRegistering] = useState(false);
 
+  // Verificamos si ya hay sesión al cargar
   React.useEffect(() => {
-    const checkRedirect = async () => {
-      try {
-        const result = await getRedirectResult(auth);
-        if (result) {
-          toast.success('Sesión iniciada con Google');
-          onComplete();
-        }
-      } catch (err: any) {
-        console.error("Redirect auth error:", err);
-        setError(err.message || 'Error al iniciar sesión.');
-        toast.error('Error al iniciar sesión con Google');
+    supabase.auth.getSession().then(({ data }) => {
+      if (data.session) {
+        onComplete();
       }
-    };
-    checkRedirect();
+    });
   }, [onComplete]);
 
   const handleGoogleLogin = async () => {
     setIsLoading(true);
     setError('');
-    const provider = new GoogleAuthProvider();
-    // Use redirect to avoid popup blockers on mobile devices (e.g. auth/popup-closed-by-user on iOS)
-    try {
-      await signInWithRedirect(auth, provider);
-    } catch (err: any) {
-      console.error(err);
-      setError(err.message || 'Error al iniciar sesión.');
+    
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: window.location.origin, // Vuelve a tu app actual
+        scopes: 'https://www.googleapis.com/auth/fitness.heart_rate.read https://www.googleapis.com/auth/fitness.oxygen_saturation.read https://www.googleapis.com/auth/fitness.activity.read'
+      }
+    });
+
+    if (error) {
+      console.error(error);
+      setError(error.message);
       toast.error('Error al iniciar sesión con Google');
       setIsLoading(false);
     }
@@ -57,23 +53,22 @@ export default function OnboardingScreen({ onComplete }: OnboardingScreenProps) 
     
     setIsLoading(true);
     setError('');
+
     try {
       if (isRegistering) {
-        await createUserWithEmailAndPassword(auth, email, password);
-        toast.success('Cuenta creada exitosamente');
+        const { error } = await supabase.auth.signUp({ email, password });
+        if (error) throw error;
+        toast.success('Cuenta creada. Revisa tu correo si es necesario.');
       } else {
-        await signInWithEmailAndPassword(auth, email, password);
+        const { error } = await supabase.auth.signInWithPassword({ email, password });
+        if (error) throw error;
         toast.success('Sesión iniciada correctamente');
+        onComplete();
       }
-      onComplete();
     } catch (err: any) {
       console.error(err);
-      let msg = 'Error en la autenticación.';
-      if (err.code === 'auth/email-already-in-use') msg = 'El correo ya está en uso. Si usaste Google anteriormente, inicia sesión con Google.';
-      if (err.code === 'auth/wrong-password' || err.code === 'auth/user-not-found' || err.code === 'auth/invalid-credential') msg = 'Credenciales inválidas.';
-      if (err.code === 'auth/weak-password') msg = 'La contraseña es muy débil (mín. 6 caracteres).';
-      setError(msg);
-      toast.error(msg);
+      setError(err.message || 'Error en la autenticación.');
+      toast.error(err.message || 'Error en la autenticación.');
     } finally {
       setIsLoading(false);
     }

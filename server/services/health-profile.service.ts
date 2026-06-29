@@ -1,33 +1,19 @@
 import { UpdateHealthProfileDto } from '../dto/health-profile.dto';
 import { IHealthProfileRepository } from '../repositories/interfaces/health-profile.repository.interface';
-import { FirestoreHealthProfileRepository } from '../repositories/firestore/health-profile.firestore';
+// Cambiamos el import:
+import { SupabaseHealthProfileRepository } from '../repositories/supabase/health-profile.supabase';
 
-// In a real scenario, this would use firebase-admin or pg for persistence
 export class HealthProfileService {
   constructor(private readonly healthProfileRepository: IHealthProfileRepository) {}
 
-  /**
-   * Retrieves a health profile for a specific user.
-   */
   async getProfile(userId: string) {
     const profile = await this.healthProfileRepository.getProfile(userId);
-    
-    if (!profile) {
-      // Could throw a NotFoundException here
-      return null;
-    }
-    
-    return profile;
+    return profile || null;
   }
 
-  /**
-   * Updates or creates the user's health profile.
-   */
   async updateProfile(userId: string, data: UpdateHealthProfileDto) {
-    // Abstracting validation and business logic here
     if (data.bpmReposo > 120) {
       console.warn('High resting BPM recorded:', data.bpmReposo);
-      // Trigger a secondary service or emit an event
     }
 
     const updatedProfile = await this.healthProfileRepository.updateProfile(userId, data);
@@ -40,6 +26,6 @@ export class HealthProfileService {
   }
 }
 
-// Dependency Injection simulation
-const healthProfileRepository = new FirestoreHealthProfileRepository();
+// Cambiamos la instanciación:
+const healthProfileRepository = new SupabaseHealthProfileRepository();
 export const healthProfileService = new HealthProfileService(healthProfileRepository);
