@@ -1,8 +1,11 @@
-import { supabase } from './supabaseClient';
+import { getActiveSupabaseSession, supabase } from './supabaseClient';
 import { HealthEvent } from '../types';
 
 export const fetchHealthHistory = async (userId: string): Promise<HealthEvent[]> => {
   if (!userId) return [];
+  const session = await getActiveSupabaseSession();
+  if (!session?.user?.id) return [];
+
   const { data, error } = await supabase
     .from('health_events')
     .select('*')
@@ -29,6 +32,9 @@ export const fetchHealthHistory = async (userId: string): Promise<HealthEvent[]>
 
 export const fetchUserInsight = async (userId: string) => {
   if (!userId) return null;
+  const session = await getActiveSupabaseSession();
+  if (!session?.user?.id) return null;
+
   const { data, error } = await supabase
     .from('user_insights')
     .select('*')
@@ -53,6 +59,10 @@ export const insertHealthEvent = async (
   badge: string,
   details?: any
 ) => {
+  const session = await getActiveSupabaseSession();
+  if (!session?.user?.id || session.user.id !== userId) {
+    return null;
+  }
   const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   const dateOptions: Intl.DateTimeFormatOptions = { day: 'numeric', month: 'long' };
   const dateStr = `Hoy, ${new Date().toLocaleDateString('es-ES', dateOptions)}`;
@@ -87,6 +97,10 @@ export const insertManualLog = async (
   mood: string, 
   activity: string
 ) => {
+  const session = await getActiveSupabaseSession();
+  if (!session?.user?.id || session.user.id !== userId) {
+    return null;
+  }
   const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   const dateOptions: Intl.DateTimeFormatOptions = { day: 'numeric', month: 'long' };
   const dateStr = `Hoy, ${new Date().toLocaleDateString('es-ES', dateOptions)}`;

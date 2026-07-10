@@ -1,3 +1,5 @@
+import 'dotenv/config';
+
 import { setupTracing } from './server/observability/tracing';
 setupTracing();
 
@@ -6,17 +8,14 @@ import { ExpressAdapter } from '@nestjs/platform-express';
 import { WsAdapter } from '@nestjs/platform-ws';
 import { AppModule } from './server/nest-scaffold/app.module';
 
-import express from "express";
-import path from "path";
-import { createServer as createViteServer } from "vite";
-import dotenv from "dotenv";
-import apiRoutes from "./server/routes/index";
-import { errorHandler } from "./server/middlewares/errorHandler";
-import cors from "cors";
-import { registerEventConsumers } from "./server/events";
-import geminiRoutes from "./server/routes/gemini";
-
-dotenv.config();
+import express from 'express';
+import path from 'path';
+import { createServer as createViteServer } from 'vite';
+import apiRoutes from './server/routes/index';
+import { errorHandler } from './server/middlewares/errorHandler';
+import cors from 'cors';
+import { registerEventConsumers } from './server/events';
+import geminiRoutes from './server/routes/gemini';
 
 async function startServer() {
   const app = express();

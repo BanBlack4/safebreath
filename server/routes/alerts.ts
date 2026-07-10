@@ -1,28 +1,42 @@
 import { Router } from 'express';
-import { supabase } from '../../src/services/supabaseClient'; // Tu nuevo cliente
-
+import { supabase } from '../../src/services/supabaseClient';
 import { latamSmsService } from '../services/latamSmsService';
 
 const router = Router();
 
-// --- 1. MIGRADO A SUPABASE ---
 router.post('/sos', async (req, res) => {
-  const { contacts, message } = req.body;
-  // ... tu lógica de latamSmsService ...
+  const { contacts = [], message = 'Alerta SafeBreath' } = req.body ?? {};
 
-  // MIGRACIÓN A SUPABASE
-  const { error } = await supabase.from('global_alerts').insert({
-    message,
-    contacts: contacts.map((c: any) => c.name),
-    sms_results: results // resultado de latamSmsService
-  });
+  const results = [] as Array<{ recipientName: string; status: string; provider?: string }>;
+
+  for (const contact of contacts) {
+    if (!contact?.phone) continue;
+
+    const result = await latamSmsService.dispatchLatAmSms(
+      contact.name || 'Contacto',
+      contact.phone,
+      message
+    );
+
+    results.push({
+      recipientName: result.recipientName,
+      status: result.status,
+      provider: result.provider
+    });
+  }
+
+  try {
+    await supabase.from('global_alerts').insert({
+      message,
+      contacts: contacts.map((contact: any) => contact.name || 'Contacto'),
+      sms_results: results,
+      created_at: new Date().toISOString()
+    });
+  } catch (error: any) {
+    console.warn('Unable to persist SOS alert log:', error?.message || error);
+  }
 
   res.json({ success: true, delivered: results });
-});
-
-
-  const messaging = admin.messaging();
-  // ... tu lógica de notificación ...
 });
 
 export default router;

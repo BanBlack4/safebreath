@@ -511,6 +511,7 @@ var init_telemetry_handler = __esm({
 });
 
 // server.ts
+var import_config = require("dotenv/config");
 init_tracing();
 var import_core3 = require("@nestjs/core");
 var import_platform_express = require("@nestjs/platform-express");
@@ -672,7 +673,6 @@ AppModule = __decorateClass([
 var import_express7 = __toESM(require("express"), 1);
 var import_path = __toESM(require("path"), 1);
 var import_vite = require("vite");
-var import_dotenv = __toESM(require("dotenv"), 1);
 
 // server/routes/index.ts
 var import_express5 = require("express");
@@ -683,13 +683,18 @@ var import_express = require("express");
 // src/services/supabaseClient.ts
 var import_supabase_js = require("@supabase/supabase-js");
 var import_meta = {};
-var rawUrl = import_meta.env.VITE_SUPABASE_URL || "";
+var getEnvValue = (key) => {
+  const viteEnv = typeof import_meta !== "undefined" && import_meta.env;
+  return viteEnv?.[key] || process.env[key] || "";
+};
+var rawUrl = getEnvValue("VITE_SUPABASE_URL") || getEnvValue("SUPABASE_URL") || "";
 var supabaseUrl = rawUrl.replace(/\/rest\/v1\/?$/, "");
-var supabaseAnonKey = import_meta.env.VITE_SUPABASE_ANON_KEY || "";
-if (!supabaseUrl || !supabaseAnonKey) {
+var supabaseAnonKey = getEnvValue("VITE_SUPABASE_ANON_KEY") || getEnvValue("SUPABASE_ANON_KEY") || "";
+var isSupabaseConfigured = Boolean(supabaseUrl && supabaseAnonKey);
+if (!isSupabaseConfigured) {
   console.error("Error: Faltan las variables de entorno de Supabase (VITE_SUPABASE_URL o VITE_SUPABASE_ANON_KEY)");
 }
-var supabase = (0, import_supabase_js.createClient)(supabaseUrl, supabaseAnonKey);
+var supabase = isSupabaseConfigured ? (0, import_supabase_js.createClient)(supabaseUrl, supabaseAnonKey) : (0, import_supabase_js.createClient)("https://placeholder.supabase.co", "placeholder");
 
 // server/repositories/interfaces/supabase/health-profile.supabase.ts
 var SupabaseHealthProfileRepository = class {
@@ -1465,7 +1470,6 @@ var gemini_default = router6;
 
 // server.ts
 setupTracing();
-import_dotenv.default.config();
 async function startServer() {
   const app = (0, import_express7.default)();
   const PORT = 3e3;
