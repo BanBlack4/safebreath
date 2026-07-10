@@ -1,6 +1,24 @@
 import { supabase } from '../services/supabaseClient'; // Asegúrate de que la ruta sea correcta
 import { ITelemetryRepository } from '../interfaces/telemetry.repository.interface';
 
+export const syncTelemetryBatch = async (points: Array<{ bpm: number; hrv: number; timestamp: number; confidence: number }>) => {
+  if (!points.length) return;
+
+  const rows = points.map((point) => ({
+    timestamp: new Date(point.timestamp).toISOString(),
+    bpm: point.bpm,
+    hrv: point.hrv,
+    confidence: point.confidence,
+    source: 'client'
+  }));
+
+  const { error } = await supabase.from('telemetry').insert(rows);
+
+  if (error) {
+    console.warn('No se pudo sincronizar telemetría con Supabase:', error.message);
+  }
+};
+
 export class SupabaseTelemetryRepository implements ITelemetryRepository {
   
   async saveTelemetry(userId: string, data: any): Promise<void> {

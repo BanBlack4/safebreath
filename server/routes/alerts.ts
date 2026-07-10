@@ -20,9 +20,7 @@ router.post('/sos', async (req, res) => {
   res.json({ success: true, delivered: results });
 });
 
-// --- 2. MANTENIDO EN FIREBASE (FCM) ---
-router.post('/send-critical-alert', async (req, res) => {
-  // Aquí SÍ usas admin.messaging()
+
   const messaging = admin.messaging();
   // ... tu lógica de notificación ...
 });

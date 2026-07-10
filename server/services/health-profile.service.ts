@@ -1,7 +1,6 @@
 import { UpdateHealthProfileDto } from '../dto/health-profile.dto';
 import { IHealthProfileRepository } from '../repositories/interfaces/health-profile.repository.interface';
-// Cambiamos el import:
-import { SupabaseHealthProfileRepository } from '../repositories/supabase/health-profile.supabase';
+import { SupabaseHealthProfileRepository } from '../repositories/interfaces/supabase/health-profile.supabase';
 
 export class HealthProfileService {
   constructor(private readonly healthProfileRepository: IHealthProfileRepository) {}
