@@ -409,18 +409,6 @@ export default function ConnectDevicesScreen({
             : `Conectado a la cuenta Google de ${userName}.`
         };
         updateDevicesList([...activeDevices, healthHubDevice]);
-        
-        // Save to Firestore
-        if (auth.currentUser) {
-          try {
-            const userRef = doc(db, 'users', auth.currentUser.uid);
-            await setDoc(userRef, {
-              devices: arrayUnion(healthHubDevice)
-            }, { merge: true });
-          } catch (e) {
-            console.error("Error saving device to Firestore:", e);
-          }
-        }
       } catch (err: any) {
         console.error(err);
         setHealthSyncStatus(prev => ({ ...prev, [provider]: 'idle' }));
@@ -445,18 +433,6 @@ export default function ConnectDevicesScreen({
         };
         
         updateDevicesList([...activeDevices, healthHubDevice]);
-        
-        // Save to Firestore
-        if (auth.currentUser) {
-          try {
-            const userRef = doc(db, 'users', auth.currentUser.uid);
-            setDoc(userRef, {
-              devices: arrayUnion(healthHubDevice)
-            }, { merge: true }).catch(console.error);
-          } catch (e) {
-            console.error("Error saving Apple Health device to Firestore:", e);
-          }
-        }
       }, 2500);
     }
   };

@@ -37,7 +37,7 @@ ALTER TABLE public.user_insights ALTER COLUMN user_id TYPE TEXT;
 ALTER TABLE public.user_telemetry ALTER COLUMN user_id TYPE TEXT;
 
 -- 4. Recrear las políticas usando auth.jwt()->>'sub'
--- Esto compara directamente el string del ID de Firebase sin forzarlo a UUID
+-- Esto compara directamente el string del identificador de usuario sin forzarlo a UUID
 
 CREATE POLICY "Users can view their own health events" 
 ON public.health_events FOR SELECT 
@@ -103,9 +103,9 @@ En el código hemos implementado tres interacciones directas con Supabase usando
 
 Para que nuestro cliente Supabase (usando `supabase.ts`) tenga permiso, debes asegurarte de tener (o actualizar) las siguientes políticas RLS (Asegúrate de haber ejecutado los scripts de arriba para convertir `user_id` a `TEXT` y usar las políticas actualizadas).
 
-> **IMPORTANTE sobre Firebase Auth:** Dado que el frontend actualmente detecta el estado de sesión usando `firebase` (`auth.currentUser`), ten en cuenta que para insertar en Supabase usando el Row Level Security, necesitas **una de dos opciones**:
+> **IMPORTANTE sobre autenticación:** Dado que el frontend usa el estado de sesión del cliente de Supabase, ten en cuenta que para insertar en Supabase usando Row Level Security necesitas **una de dos opciones**:
 > 1. Migrar la lógica de login a **Supabase Auth** en el Frontend.
-> 2. Configurar Firebase Auth como un [Custom JWT Provider](https://supabase.com/docs/guides/auth/auth-firebase) en Supabase para que reconozca los tokens de Firebase.
+> 2. Configurar un proveedor JWT personalizado en Supabase si quieres usar un proveedor de identidad externo.
 
 ## 3. Variables de Entorno
 

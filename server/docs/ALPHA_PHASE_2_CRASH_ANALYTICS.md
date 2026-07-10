@@ -1,7 +1,7 @@
 # SafeBreath AI: Closed Alpha - Phase 2 Crash Analytics
 
 ## Diagnostic Architecture
-To maintain absolute reliability during an intervention, we must have deep visibility into mobile runtime health. We use a combination of **Sentry** (for React Native JS crashes) and **Firebase Crashlytics** (for native iOS/Android layer panics).
+To maintain absolute reliability during an intervention, we must have deep visibility into mobile runtime health. We use a combination of **Sentry** (for React Native JS crashes) and native/mobile error reporting for platform panics.
 
 ### 1. Tracked Metrics
 *   **App Crashes:** Fatal JS errors and Native hard crashes.

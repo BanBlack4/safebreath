@@ -6,6 +6,8 @@
 import { useState, useEffect } from 'react';
 import Header from './components/Header';
 import BottomNav from './components/BottomNav';
+import { supabase } from './services/supabaseClient';
+import { getProfileFromSupabase, syncProfileToSupabase } from './services/supabaseProfile';
 import LiveMonitoringScreen from './components/LiveMonitoringScreen';
 import CalmInterventionScreen from './components/CalmInterventionScreen';
 import ConnectDevicesScreen from './components/ConnectDevicesScreen';
@@ -19,12 +21,11 @@ import AdminDashboardScreen from './components/AdminDashboardScreen';
 import HistoryScreen from './components/HistoryScreen';
 import EventDetailScreen from './components/EventDetailScreen';
 import { AppScreen, UserProfile, ConnectedDevice, UserRole } from './types';
+import type { User } from '@supabase/supabase-js';
 import { motion, AnimatePresence } from 'motion/react';
 import { Heart, Activity, CheckCircle, Smartphone } from 'lucide-react';
 
 
-import { doc, getDoc, setDoc, writeBatch, collection, getDocs } from 'firebase/firestore';
-import { syncProfileToFirestore, getProfileFromFirestore } from './services/firestore';
 import { Toaster, toast } from 'react-hot-toast';
 
 const LOCAL_STORAGE_PROFILE_KEY = 'safebreath_user_profile_data';
@@ -164,17 +165,23 @@ export default function App() {
     try {
       localStorage.setItem('safebreath_connected_devices', JSON.stringify(newDevices));
     } catch (e) {}
-    
-    if (auth.currentUser) {
+
+    const { data: { session } } = await supabase.auth.getSession();
+    const userId = session?.user?.id;
+
+    if (userId) {
       try {
-        const batch = writeBatch(db);
-        newDevices.forEach(device => {
-          const deviceRef = doc(db, 'users', auth.currentUser!.uid, 'devices', device.id);
-          batch.set(deviceRef, device, { merge: true });
-        });
-        await batch.commit();
+        const { error } = await supabase.from('device_profiles').upsert({
+          user_id: userId,
+          devices: newDevices,
+          updated_at: new Date().toISOString()
+        }, { onConflict: 'user_id' });
+
+        if (error) {
+          console.warn('Failed to sync devices to Supabase:', error.message);
+        }
       } catch (e) {
-        console.warn("Failed to sync devices to Firestore:", e);
+        console.warn('Failed to sync devices to Supabase:', e);
       }
     }
   };
@@ -232,84 +239,103 @@ export default function App() {
   const [userRole, setUserRole] = useState<UserRole>('user');
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+    let isMounted = true;
+
+    const initializeSession = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      const currentUser = session?.user ?? null;
+
+      if (!isMounted) return;
+
       setUser(currentUser);
       setIsAuthLoading(false);
-      
+
       if (currentUser) {
-        // Sync User Doc
         try {
-          const userRef = doc(db, 'users', currentUser.uid);
-          const userDoc = await getDoc(userRef);
-          if (!userDoc.exists()) {
-            await setDoc(userRef, { email: currentUser.email, createdAt: new Date().toISOString(), role: 'user' });
-            setShowTutorial(true);
-            setUserRole('user');
+          const { data: profileRow, error: roleError } = await supabase
+            .from('user_profiles')
+            .select('role, email')
+            .eq('user_id', currentUser.id)
+            .maybeSingle();
+
+          if (!roleError && profileRow) {
+            setUserRole((profileRow.role as UserRole) || 'user');
           } else {
-            const data = userDoc.data();
-            setUserRole((data?.role as UserRole) || 'user');
-            
-            // Sync initial devices if available
-            const devicesSnapshot = await getDocs(collection(db, 'users', currentUser.uid, 'devices'));
-            if (!devicesSnapshot.empty) {
-              const fetchedDevices = devicesSnapshot.docs.map(doc => doc.data() as ConnectedDevice);
-              setDevices(fetchedDevices);
-              try {
-                localStorage.setItem('safebreath_connected_devices', JSON.stringify(fetchedDevices));
-              } catch(e) {}
-            } else if (data?.devices && Array.isArray(data.devices)) {
-              // Fallback to legacy array if it exists
-              setDevices(data.devices);
-              try {
-                localStorage.setItem('safebreath_connected_devices', JSON.stringify(data.devices));
-              } catch(e) {}
-              // Migrate legacy data to subcollection
-              const batch = writeBatch(db);
-              data.devices.forEach((dev: ConnectedDevice) => {
-                const deviceRef = doc(db, 'users', currentUser.uid, 'devices', dev.id);
-                batch.set(deviceRef, dev, { merge: true });
-              });
-              await batch.commit();
-            }
+            setUserRole('user');
+            await supabase.from('user_profiles').upsert({
+              user_id: currentUser.id,
+              email: currentUser.email,
+              role: 'user',
+              created_at: new Date().toISOString()
+            }, { onConflict: 'user_id' });
+            setShowTutorial(true);
           }
         } catch (error: any) {
-          if (error.code !== 'unavailable') {
-            console.warn("Failed to sync user doc:", error.message);
-          }
-        }
-        
-        // Log Firebase Token claims (Optional, for debugging)
-        try {
-          let idTokenResult = await currentUser.getIdTokenResult();
-          console.log("🔥 [Firebase Auth] Token claims:", idTokenResult.claims);
-        } catch(e) {
-          console.error("No se pudo obtener token claims", e);
+          console.warn('Failed to sync user profile:', error.message);
         }
 
-        // Load external profile
-        const remoteProfile = await getProfileFromFirestore();
+        try {
+          const { data: deviceRow, error: deviceError } = await supabase
+            .from('device_profiles')
+            .select('devices')
+            .eq('user_id', currentUser.id)
+            .maybeSingle();
+
+          if (!deviceError && deviceRow?.devices) {
+            const fetchedDevices = deviceRow.devices as ConnectedDevice[];
+            setDevices(fetchedDevices);
+            try {
+              localStorage.setItem('safebreath_connected_devices', JSON.stringify(fetchedDevices));
+            } catch (e) {}
+          }
+        } catch (error: any) {
+          console.warn('Failed to load devices from Supabase:', error.message);
+        }
+
+        const remoteProfile = await getProfileFromSupabase(currentUser.id);
         if (remoteProfile) {
           setProfile(remoteProfile);
-          try { localStorage.setItem(LOCAL_STORAGE_PROFILE_KEY, JSON.stringify(remoteProfile)); } catch(e){}
+          try { localStorage.setItem(LOCAL_STORAGE_PROFILE_KEY, JSON.stringify(remoteProfile)); } catch (e) {}
         } else {
-          syncProfileToFirestore(profile);
+          await syncProfileToSupabase(currentUser.id, profile);
         }
       }
+    };
+
+    initializeSession();
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      const nextUser = session?.user ?? null;
+      setUser(nextUser);
+      setIsAuthLoading(false);
+
+      if (!nextUser) {
+        setUserRole('user');
+      }
     });
-    return () => unsubscribe();
+
+    return () => {
+      isMounted = false;
+      subscription.unsubscribe();
+    };
   }, []);
 
   // Calibrating status bar indicator overlay
   const [isCalibrating, setIsCalibrating] = useState(false);
 
-  const handleSaveProfile = (updated: UserProfile) => {
+  const handleSaveProfile = async (updated: UserProfile) => {
     setProfile(updated);
     try {
       localStorage.setItem(LOCAL_STORAGE_PROFILE_KEY, JSON.stringify(updated));
     } catch (e) {
       // Ignored
     }
-    syncProfileToFirestore(updated);
+
+    const { data: { session } } = await supabase.auth.getSession();
+    const userId = session?.user?.id;
+    if (userId) {
+      await syncProfileToSupabase(userId, updated);
+    }
   };
 
 
@@ -336,8 +362,8 @@ export default function App() {
     });
   };
 
-  const handleSignOut = () => {
-    signOut(auth);
+  const handleSignOut = async () => {
+    await supabase.auth.signOut();
   };
 
   const triggerAlertScreenWithPermission = async () => {

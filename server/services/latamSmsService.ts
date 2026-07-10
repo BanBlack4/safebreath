@@ -1,4 +1,5 @@
-import admin from 'firebase-admin';
+
+import { supabase } from '../../src/services/supabaseClient';
 
 export interface LatAmSmsLog {
   recipientName: string;
@@ -274,20 +275,23 @@ export class LatAmSmsService {
     const simulatedLatency = Math.floor(Math.random() * 77) + 72;
     await new Promise(resolve => setTimeout(resolve, 80)); // Simulate round-trip
 
-    // Store in audit firestore for developer simulator analytics
+    // Store in audit log via Supabase when available.
     try {
-      const firestore = admin.firestore();
-      await firestore.collection('latam_sms_audit').add({
-        recipientName,
+      const { error } = await supabase.from('latam_sms_audit').insert({
+        recipient_name: recipientName,
         phone,
         service: 'simulated_low_latency_trunks',
-        carrierPath: carrier,
+        carrier_path: carrier,
         message: text,
-        latencyMs: simulatedLatency,
-        timestamp: admin.firestore.FieldValue.serverTimestamp()
+        latency_ms: simulatedLatency,
+        created_at: new Date().toISOString()
       });
-    } catch {
-      // safe bypass if firestore isn't provisioned yet
+
+      if (error) {
+        console.warn('LatAm SMS audit insert skipped:', error.message);
+      }
+    } catch (err: any) {
+      console.warn('LatAm SMS audit insert skipped:', err?.message || err);
     }
 
     return {

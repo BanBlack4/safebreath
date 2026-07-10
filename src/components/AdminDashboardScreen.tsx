@@ -33,7 +33,8 @@ import {
   Download
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
-import { fetchAllTelemetryData, populateMockTelemetryData } from '../services/firestore';
+import { supabase } from '../services/supabaseClient';
+import { fetchAllTelemetryData, populateMockTelemetryData } from '../services/supabaseAdminData';
 
 interface AdminDashboardScreenProps {
   onBack: () => void;
@@ -61,7 +62,17 @@ export default function AdminDashboardScreen({ onBack }: AdminDashboardScreenPro
   const [simulationMultiplier, setSimulationMultiplier] = useState<number>(1.0);
 
   // Anonymized user sample cohort to extract live statistics
-  const [userCohort, setUserCohort] = useState<any[]>([]);
+  const [userCohort, setUserCohort] = useState<Array<{
+    id: number | string;
+    name: string;
+    edad: number;
+    asma: boolean;
+    ansiedad: boolean;
+    epoc: boolean;
+    crisesEvitadas: number;
+    avgRecuperacion: number;
+    timestamp?: string;
+  }>>([]);
 
   useEffect(() => {
     loadRealTelemetry();
@@ -94,7 +105,7 @@ export default function AdminDashboardScreen({ onBack }: AdminDashboardScreenPro
 
   // Compute calculated statistics dynamically based on filters
   const filteredCohort = useMemo(() => {
-    return userCohort.filter(u => {
+    return userCohort.filter((u: { edad: number; asma: boolean; ansiedad: boolean; epoc: boolean }) => {
       const matchAge = u.edad >= ageRange[0] && u.edad <= ageRange[1];
       let matchCondition = true;
       if (selectedCondition === 'asma') matchCondition = u.asma;
@@ -119,22 +130,22 @@ export default function AdminDashboardScreen({ onBack }: AdminDashboardScreenPro
     }
 
     const totalCrisesEvitadas = Math.round(
-      filteredCohort.reduce((sum, u) => sum + u.crisesEvitadas, 0) * simulationMultiplier
+      filteredCohort.reduce((sum: number, u: { crisesEvitadas: number }) => sum + u.crisesEvitadas, 0) * simulationMultiplier
     );
 
     const avgRecuperacionMin = (
-      filteredCohort.reduce((sum, u) => sum + u.avgRecuperacion, 0) / totalUsers
+      filteredCohort.reduce((sum: number, u: { avgRecuperacion: number }) => sum + u.avgRecuperacion, 0) / totalUsers
     ).toFixed(1);
 
     // KPI: Porcentaje de respuesta exitosa de crisis de forma no farmacológica
     const efectividadKPI = Math.min(
       98,
-      Math.round(90 + (filteredCohort.filter(u => u.ansiedad).length / totalUsers) * 5)
+      Math.round(90 + (filteredCohort.filter((u: { ansiedad: boolean }) => u.ansiedad).length / totalUsers) * 5)
     );
 
-    const asthmaPct = Math.round((filteredCohort.filter(u => u.asma).length / totalUsers) * 100);
-    const copdPct = Math.round((filteredCohort.filter(u => u.epoc).length / totalUsers) * 100);
-    const anxietyPct = Math.round((filteredCohort.filter(u => u.ansiedad).length / totalUsers) * 100);
+    const asthmaPct = Math.round((filteredCohort.filter((u: { asma: boolean }) => u.asma).length / totalUsers) * 100);
+    const copdPct = Math.round((filteredCohort.filter((u: { epoc: boolean }) => u.epoc).length / totalUsers) * 100);
+    const anxietyPct = Math.round((filteredCohort.filter((u: { ansiedad: boolean }) => u.ansiedad).length / totalUsers) * 100);
 
     return {
       totalCohort: totalUsers,
@@ -166,7 +177,7 @@ export default function AdminDashboardScreen({ onBack }: AdminDashboardScreenPro
     setMockLoading(true);
     setTimeout(() => {
       setMockLoading(false);
-      setSimulationMultiplier(prev => (prev === 1.0 ? 1.4 : 1.0));
+      setSimulationMultiplier((prev: number) => (prev === 1.0 ? 1.4 : 1.0));
       toast.success("Métricas recalculadas. Simulación de carga del servidor completa.", {
         icon: '💻',
       });
@@ -178,10 +189,10 @@ export default function AdminDashboardScreen({ onBack }: AdminDashboardScreenPro
     toast.loading("Generando datos simulados en base de datos...", { id: "populating" });
     const newLogs = await populateMockTelemetryData(5);
     if (newLogs && newLogs.length > 0) {
-      setUserCohort(prev => [...newLogs, ...prev]);
+      setUserCohort((prev: Array<{ id: number | string; name: string; edad: number; asma: boolean; ansiedad: boolean; epoc: boolean; crisesEvitadas: number; avgRecuperacion: number; timestamp?: string; }>) => [...newLogs, ...prev]);
       toast.success(`Añadidos ${newLogs.length} pacientes al cohorte preventivo en BD`, { id: "populating" });
     } else {
-      toast.error("Error al poblar BD. La base de datos requiere configuración Firebase.", { id: "populating" });
+      toast.error("No se pudo poblar la base de datos desde Supabase. Revisa la configuración y la tabla telemetry.", { id: "populating" });
     }
   };
 
@@ -193,7 +204,7 @@ export default function AdminDashboardScreen({ onBack }: AdminDashboardScreenPro
 
     const headers = ["ID", "Nombre (Anonimizado)", "Edad", "Asma", "Epoc", "Ansiedad", "Crisis Evitadas", "Avg Recuperación (Min)", "Fecha de Registro"];
     
-    const csvRows = userCohort.map(user => {
+    const csvRows = userCohort.map((user: { id: number | string; name: string; edad: number; asma: boolean; epoc: boolean; ansiedad: boolean; crisesEvitadas: number; avgRecuperacion: number; timestamp?: string; }) => {
       return [
         user.id,
         user.name,
@@ -223,228 +234,30 @@ export default function AdminDashboardScreen({ onBack }: AdminDashboardScreenPro
   };
 
   const exportDatabaseToRealtimeDB = async () => {
-    const loadToast = toast.loading("Preparando exportación completa de Firestore...");
+    const loadToast = toast.loading("Preparando exportación desde Supabase...");
     try {
-      const { db, auth } = await import('../firebase');
-      const { collection, getDocs, doc, getDoc, getDocFromCache, getDocsFromCache } = await import('firebase/firestore');
-      
-      const safeGetDoc = async (docRef: any) => {
-        try {
-          return await getDoc(docRef);
-        } catch (err: any) {
-          console.warn("safeGetDoc failed to get from server, trying cache...", err.message);
-          try {
-            return await getDocFromCache(docRef);
-          } catch (cacheErr: any) {
-            console.error("safeGetDoc from cache also failed:", cacheErr.message);
-            return null;
-          }
-        }
+      const { data, error } = await supabase.from('telemetry').select('*').order('timestamp', { ascending: false }).limit(100);
+      if (error) throw error;
+
+      const exportData = {
+        telemetry: (data || []).reduce((acc: Record<string, any>, row: any) => {
+          acc[row.id] = row;
+          return acc;
+        }, {})
       };
 
-      const safeGetDocs = async (collRef: any) => {
-        try {
-          return await getDocs(collRef);
-        } catch (err: any) {
-          console.warn("safeGetDocs failed to get from server, trying cache...", err.message);
-          try {
-            return await getDocsFromCache(collRef);
-          } catch (cacheErr: any) {
-            console.error("safeGetDocs from cache also failed:", cacheErr.message);
-            return null;
-          }
-        }
-      };
-
-      const rtdbStructure: any = {};
-
-      // 1. Export telemetry_logs
-      try {
-        const telemetrySnap = await safeGetDocs(collection(db, 'telemetry_logs'));
-        if (telemetrySnap && !telemetrySnap.empty) {
-          const telemetryLogs: any = {};
-          telemetrySnap.forEach(docSnap => {
-            telemetryLogs[docSnap.id] = docSnap.data();
-          });
-          rtdbStructure['telemetry_logs'] = telemetryLogs;
-        }
-      } catch (err: any) {
-        console.warn("Could not export telemetry_logs collection:", err.message);
-      }
-
-      // 2. Export global_alerts
-      try {
-        const snap = await safeGetDocs(collection(db, 'global_alerts'));
-        if (snap && !snap.empty) {
-          const dict: any = {};
-          snap.forEach(docSnap => { dict[docSnap.id] = docSnap.data(); });
-          rtdbStructure['global_alerts'] = dict;
-        }
-      } catch (e) {}
-
-      // 3. Export alert_logs
-      try {
-        const snap = await safeGetDocs(collection(db, 'alert_logs'));
-        if (snap && !snap.empty) {
-          const dict: any = {};
-          snap.forEach(docSnap => { dict[docSnap.id] = docSnap.data(); });
-          rtdbStructure['alert_logs'] = dict;
-        }
-      } catch (e) {}
-
-      // 4. Export registered_devices
-      try {
-        const snap = await safeGetDocs(collection(db, 'registered_devices'));
-        if (snap && !snap.empty) {
-          const dict: any = {};
-          snap.forEach(docSnap => { dict[docSnap.id] = docSnap.data(); });
-          rtdbStructure['registered_devices'] = dict;
-        }
-      } catch (e) {}
-
-      // 5. Export authenticated user's data
-      if (auth.currentUser) {
-        const userId = auth.currentUser.uid;
-        const userDocRef = doc(db, 'users', userId);
-        
-        const userData: any = {};
-        try {
-          const userSnap = await safeGetDoc(userDocRef);
-          if (userSnap && userSnap.exists()) {
-            Object.assign(userData, userSnap.data());
-          } else {
-            userData.email = auth.currentUser.email || '';
-            userData.createdAt = new Date().toISOString();
-          }
-        } catch (e: any) {
-          console.warn("Could not fetch root user document:", e.message);
-          userData.email = auth.currentUser.email || '';
-          userData.createdAt = new Date().toISOString();
-        }
-
-        // Fetch user subcollections: 'profile'
-        try {
-          const profileSnap = await safeGetDocs(collection(db, `users/${userId}/profile`));
-          if (profileSnap && !profileSnap.empty) {
-            const profileData: any = {};
-            profileSnap.forEach(pDoc => {
-              profileData[pDoc.id] = pDoc.data();
-            });
-            userData['profile'] = profileData;
-          }
-        } catch (err: any) {
-          console.warn("Could not export profile subcollection:", err.message);
-        }
-
-        // Fetch user subcollections: 'history'
-        try {
-          const historySnap = await safeGetDocs(collection(db, `users/${userId}/history`));
-          if (historySnap && !historySnap.empty) {
-            const historyData: any = {};
-            historySnap.forEach(hDoc => {
-              historyData[hDoc.id] = hDoc.data();
-            });
-            userData['history'] = historyData;
-          }
-        } catch (err: any) {
-          console.warn("Could not export history subcollection:", err.message);
-        }
-
-        // Fetch user subcollections: 'telemetry'
-        try {
-          const telemetrySnap = await safeGetDocs(collection(db, `users/${userId}/telemetry`));
-          if (telemetrySnap && !telemetrySnap.empty) {
-            const teleData: any = {};
-            telemetrySnap.forEach(tDoc => {
-              teleData[tDoc.id] = tDoc.data();
-            });
-            userData['telemetry'] = teleData;
-          }
-        } catch (err: any) {
-          console.warn("Could not export telemetry subcollection:", err.message);
-        }
-
-        // Build users branch
-        rtdbStructure['users'] = {
-          [userId]: userData
-        };
-      }
-
-      // 6. Support potentially listing root users if authorized
-      try {
-        const usersSnap = await safeGetDocs(collection(db, 'users'));
-        if (usersSnap && !usersSnap.empty) {
-          if (!rtdbStructure['users']) rtdbStructure['users'] = {};
-          for (const userDoc of usersSnap.docs) {
-            const userId = userDoc.id;
-            if (!rtdbStructure['users'][userId]) rtdbStructure['users'][userId] = {};
-            Object.assign(rtdbStructure['users'][userId], userDoc.data());
-
-            try {
-              const subP = await safeGetDocs(collection(db, `users/${userId}/profile`));
-              if (subP && !subP.empty) {
-                const pData: any = {};
-                subP.forEach(d => { pData[d.id] = d.data(); });
-                rtdbStructure['users'][userId]['profile'] = pData;
-              }
-            } catch (pErr) {}
-
-            try {
-              const subH = await safeGetDocs(collection(db, `users/${userId}/history`));
-              if (subH && !subH.empty) {
-                const hData: any = {};
-                subH.forEach(d => { hData[d.id] = d.data(); });
-                rtdbStructure['users'][userId]['history'] = hData;
-              }
-            } catch (hErr) {}
-
-            try {
-              const subT = await safeGetDocs(collection(db, `users/${userId}/telemetry`));
-              if (subT && !subT.empty) {
-                const tData: any = {};
-                subT.forEach(d => { tData[d.id] = d.data(); });
-                rtdbStructure['users'][userId]['telemetry'] = tData;
-              }
-            } catch (tErr) {}
-          }
-        }
-      } catch (err) {
-        // Skip if users list-read not allowed by security rules
-      }
-
-      // If absolutely no data could be retrieved (empty database)
-      const hasUserData = rtdbStructure.users && Object.keys(rtdbStructure.users).length > 0;
-      const isActuallyEmpty = Object.keys(rtdbStructure).length === 0 || 
-        (hasUserData && Object.keys(rtdbStructure.users).every((k: string) => Object.keys(rtdbStructure.users[k] || {}).length === 0));
-
-      if (isActuallyEmpty) {
-        toast.error("No se pudo obtener ningún dato de la base de datos (¿estás desconectado y sin caché?).", { id: loadToast });
-        return;
-      }
-
-      // Clean up Firestore Timestamp descriptors inside nested objects
-      const cleanData = JSON.parse(JSON.stringify(rtdbStructure, (key, value) => {
-        if (value && typeof value === 'object' && value.seconds !== undefined) {
-          return new Date(value.seconds * 1000).toISOString();
-        }
-        return value;
-      }));
-
-      // Trigger download
-      const jsonString = `data:text/json;charset=utf-8,${encodeURIComponent(
-        JSON.stringify(cleanData, null, 2)
-      )}`;
+      const jsonString = `data:text/json;charset=utf-8,${encodeURIComponent(JSON.stringify(exportData, null, 2))}`;
       const downloadAnchor = document.createElement('a');
       downloadAnchor.setAttribute('href', jsonString);
-      downloadAnchor.setAttribute('download', 'firestore-to-realtime-db-import.json');
+      downloadAnchor.setAttribute('download', 'safebreath-supabase-export.json');
       document.body.appendChild(downloadAnchor);
       downloadAnchor.click();
       downloadAnchor.remove();
 
-      toast.success("¡Base de datos exportada con éxito!", { id: loadToast });
+      toast.success("Exportación de Supabase completada", { id: loadToast });
     } catch (e: any) {
-      console.error("Export error:", e);
-      toast.error("Error al exportar: " + e.message, { id: loadToast });
+      console.error('Export error:', e);
+      toast.error('Error al exportar desde Supabase: ' + e.message, { id: loadToast });
     }
   };
 
@@ -817,7 +630,7 @@ export default function AdminDashboardScreen({ onBack }: AdminDashboardScreenPro
             className="w-full bg-amber-600 hover:bg-amber-700 text-white text-[11px] font-bold px-3.5 py-2.5 rounded-xl shadow-xs active:scale-95 transition flex justify-center items-center gap-1.5 cursor-pointer mt-1"
           >
             <Database className="w-3.5 h-3.5" />
-            Descargar Base de Datos Completa (JSON para Realtime DB)
+            Descargar Base de Datos Completa (JSON de Telemetría)
           </button>
           
           <button
