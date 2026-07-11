@@ -19,25 +19,45 @@ export const supabase = isSupabaseConfigured
   ? createClient(supabaseUrl, supabaseAnonKey)
   : createClient('https://placeholder.supabase.co', 'placeholder');
 
+export const getCurrentSupabaseUser = async () => {
+  if (!isSupabaseConfigured) {
+    return null;
+  }
+
+  try {
+    const { data: { session }, error } = await supabase.auth.getSession();
+    if (error) {
+      return null;
+    }
+    return session?.user ?? null;
+  } catch {
+    return null;
+  }
+};
+
 export const getActiveSupabaseSession = async () => {
   if (!isSupabaseConfigured) {
     return null;
   }
 
-  const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-  if (sessionError || !session?.access_token) {
-    return null;
-  }
-
-  const { data: { user }, error: userError } = await supabase.auth.getUser();
-  if (userError || !user?.id) {
-    try {
-      await supabase.auth.signOut();
-    } catch {
-      // Ignore sign-out failures here.
+  try {
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    if (sessionError || !session?.access_token) {
+      return null;
     }
+
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    if (userError || !user?.id) {
+      try {
+        await supabase.auth.signOut();
+      } catch {
+        // Ignore sign-out failures here.
+      }
+      return null;
+    }
+
+    return session;
+  } catch {
     return null;
   }
-
-  return session;
 };

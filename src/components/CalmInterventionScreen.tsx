@@ -24,6 +24,7 @@ import { useAppSettingsStore } from "../store/useAppSettingsStore";
 import { UserProfile, EmergencyContact } from "../types";
 import { toast } from "react-hot-toast";
 import { insertHealthEvent } from "../services/supabaseData";
+import { getActiveSupabaseSession } from "../services/supabaseClient";
 
 
 interface CalmInterventionScreenProps {
@@ -288,11 +289,12 @@ export default function CalmInterventionScreen({
     }
   }, [phase, contactsKey]);
 
-  const handleCompleteBreathing = () => {
-    const user = auth.currentUser;
-    if (!user) return;
+  const handleCompleteBreathing = async () => {
+    const session = await getActiveSupabaseSession();
+    const userId = session?.user?.id;
+    if (!userId) return;
     insertHealthEvent(
-      user.uid,
+      userId,
       "Respiración Completada",
       "calm_intervention",
       "El usuario completó un ejercicio de respiración guiada para disminuir agitación.",
@@ -301,18 +303,23 @@ export default function CalmInterventionScreen({
   };
 
   useEffect(() => {
-    const user = auth.currentUser;
-    if (!user) return;
+    const syncSosEvent = async () => {
+      if (phase !== "sos_dispatch") return;
 
-    if (phase === "sos_dispatch") {
+      const session = await getActiveSupabaseSession();
+      const userId = session?.user?.id;
+      if (!userId) return;
+
       insertHealthEvent(
-        user.uid,
+        userId,
         "S.O.S. Activado",
         "sos_dispatch",
         "Protocolo de emergencia activado desde el dispositivo móvil.",
         "Emergencia",
       ).catch((e) => console.error("Error insertando log de SOS:", e));
-    }
+    };
+
+    syncSosEvent();
   }, [phase]);
 
   const bgStyle = nightMode

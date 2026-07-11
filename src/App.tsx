@@ -262,12 +262,16 @@ export default function App() {
             setUserRole((profileRow.role as UserRole) || 'user');
           } else {
             setUserRole('user');
-            await supabase.from('user_profiles').upsert({
-              user_id: currentUser.id,
-              email: currentUser.email,
-              role: 'user',
-              created_at: new Date().toISOString()
-            }, { onConflict: 'user_id' });
+            try {
+              await supabase.from('user_profiles').upsert({
+                user_id: currentUser.id,
+                email: currentUser.email,
+                role: 'user',
+                created_at: new Date().toISOString()
+              }, { onConflict: 'user_id' });
+            } catch (error: any) {
+              console.warn('Failed to initialize user profile row:', error.message);
+            }
             setShowTutorial(true);
           }
         } catch (error: any) {

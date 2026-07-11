@@ -170,7 +170,7 @@ export default function HealthProfileScreen({ profile, onSaveProfile, onSignOut,
         <div className="flex justify-between items-start">
           <div>
             <h2 className="text-2xl font-bold text-[#071e27] dark:text-white">
-              {profile.name ? `Perfil de ${profile.name}` : (auth.currentUser?.displayName ? `Perfil de ${auth.currentUser.displayName.split(' ')[0]}` : 'Perfil de Salud')}
+              {profile.name ? `Perfil de ${profile.name}` : 'Perfil de Salud'}
             </h2>
             <p className="text-sm text-gray-500 dark:text-gray-400">
               Personaliza tu experiencia para una detección más precisa.

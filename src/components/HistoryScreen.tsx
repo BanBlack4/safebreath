@@ -9,6 +9,7 @@ import { FileText, Calendar, Plus, ChevronRight, Activity, Smile, Settings, Aler
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine, ReferenceArea } from 'recharts';
 import { UserProfile, HealthEvent } from '../types';
 import { fetchHealthHistory, fetchUserInsight, insertManualLog } from '../services/supabaseData';
+import { getActiveSupabaseSession } from '../services/supabaseClient';
 import { toast } from 'react-hot-toast';
 
 
@@ -34,15 +35,16 @@ export default function HistoryScreen({ profile, onEventSelect, onScreenChange }
 
   useEffect(() => {
     const loadData = async () => {
-      const user = auth.currentUser;
-      if (!user) return;
+      const session = await getActiveSupabaseSession();
+      const userId = session?.user?.id;
+      if (!userId) return;
       
-      const history = await fetchHealthHistory(user.uid);
+      const history = await fetchHealthHistory(userId);
       if (history.length > 0) {
         setEvents(history);
       }
       
-      const insight = await fetchUserInsight(user.uid);
+      const insight = await fetchUserInsight(userId);
       if (insight) {
         setInsightText(insight.insight_text);
       } else {
@@ -85,15 +87,16 @@ export default function HistoryScreen({ profile, onEventSelect, onScreenChange }
       return;
     }
 
-    const user = auth.currentUser;
-    if (!user) {
+    const session = await getActiveSupabaseSession();
+    const userId = session?.user?.id;
+    if (!userId) {
       toast.error('Debe iniciar sesión para registrar datos.');
       return;
     }
 
     try {
       toast.loading('Registrando...', { id: 'manual-log' });
-      const newLog = await insertManualLog(user.uid, bpm, spo2, manualMood, manualActivity);
+      const newLog = await insertManualLog(userId, bpm, spo2, manualMood, manualActivity);
       
       const newEvent: HealthEvent = {
         id: newLog.id,
