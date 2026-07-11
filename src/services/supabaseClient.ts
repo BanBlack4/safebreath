@@ -19,6 +19,22 @@ export const supabase = isSupabaseConfigured
   ? createClient(supabaseUrl, supabaseAnonKey)
   : createClient('https://placeholder.supabase.co', 'placeholder');
 
+export const clearSupabaseAuthHash = () => {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  const hash = window.location.hash || '';
+  if (!hash) {
+    return;
+  }
+
+  const isAuthCallbackHash = hash.includes('access_token') || hash.includes('error') || hash.includes('type=') || hash.includes('code=');
+  if (isAuthCallbackHash) {
+    window.history.replaceState({}, document.title, `${window.location.pathname}${window.location.search}`);
+  }
+};
+
 export const getCurrentSupabaseUser = async () => {
   if (!isSupabaseConfigured) {
     return null;
@@ -41,23 +57,39 @@ export const getActiveSupabaseSession = async () => {
   }
 
   try {
+    clearSupabaseAuthHash();
     const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-    if (sessionError || !session?.access_token) {
+    if (sessionError) {
+      const message = sessionError.message?.toLowerCase() || '';
+      if (message.includes('future') || message.includes('skew')) {
+        try {
+          await supabase.auth.signOut({ scope: 'local' });
+        } catch {
+          // Ignore sign-out failures here.
+        }
+        clearSupabaseAuthHash();
+      }
+      return null;
+    }
+
+    if (!session?.access_token) {
       return null;
     }
 
     const { data: { user }, error: userError } = await supabase.auth.getUser();
     if (userError || !user?.id) {
       try {
-        await supabase.auth.signOut();
+        await supabase.auth.signOut({ scope: 'local' });
       } catch {
         // Ignore sign-out failures here.
       }
+      clearSupabaseAuthHash();
       return null;
     }
 
     return session;
   } catch {
+    clearSupabaseAuthHash();
     return null;
   }
 };

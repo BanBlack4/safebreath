@@ -6,7 +6,7 @@
 import { useState, useEffect } from 'react';
 import Header from './components/Header';
 import BottomNav from './components/BottomNav';
-import { supabase } from './services/supabaseClient';
+import { getActiveSupabaseSession, supabase } from './services/supabaseClient';
 import { getProfileFromSupabase, syncProfileToSupabase } from './services/supabaseProfile';
 import LiveMonitoringScreen from './components/LiveMonitoringScreen';
 import CalmInterventionScreen from './components/CalmInterventionScreen';
@@ -166,19 +166,36 @@ export default function App() {
       localStorage.setItem('safebreath_connected_devices', JSON.stringify(newDevices));
     } catch (e) {}
 
-    const { data: { session } } = await supabase.auth.getSession();
+    const session = await getActiveSupabaseSession();
     const userId = session?.user?.id;
 
     if (userId) {
       try {
-        const { error } = await supabase.from('device_profiles').upsert({
-          user_id: userId,
-          devices: newDevices,
-          updated_at: new Date().toISOString()
-        }, { onConflict: 'user_id' });
+        const { data: existingRow } = await supabase
+          .from('device_profiles')
+          .select('user_id')
+          .eq('user_id', userId)
+          .maybeSingle();
 
-        if (error) {
-          console.warn('Failed to sync devices to Supabase:', error.message);
+        if (existingRow) {
+          const { error } = await supabase
+            .from('device_profiles')
+            .update({ devices: newDevices, updated_at: new Date().toISOString() })
+            .eq('user_id', userId);
+
+          if (error) {
+            console.warn('Failed to sync devices to Supabase:', error.message);
+          }
+        } else {
+          const { error } = await supabase.from('device_profiles').insert({
+            user_id: userId,
+            devices: newDevices,
+            updated_at: new Date().toISOString()
+          });
+
+          if (error) {
+            console.warn('Failed to sync devices to Supabase:', error.message);
+          }
         }
       } catch (e) {
         console.warn('Failed to sync devices to Supabase:', e);
@@ -242,7 +259,7 @@ export default function App() {
     let isMounted = true;
 
     const initializeSession = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
+      const session = await getActiveSupabaseSession();
       const currentUser = session?.user ?? null;
 
       if (!isMounted) return;
@@ -263,12 +280,33 @@ export default function App() {
           } else {
             setUserRole('user');
             try {
-              await supabase.from('user_profiles').upsert({
-                user_id: currentUser.id,
-                email: currentUser.email,
-                role: 'user',
-                created_at: new Date().toISOString()
-              }, { onConflict: 'user_id' });
+              const { data: existingRow } = await supabase
+                .from('user_profiles')
+                .select('user_id')
+                .eq('user_id', currentUser.id)
+                .maybeSingle();
+
+              if (existingRow) {
+                const { error: updateError } = await supabase
+                  .from('user_profiles')
+                  .update({ role: 'user', email: currentUser.email, updated_at: new Date().toISOString() })
+                  .eq('user_id', currentUser.id);
+
+                if (updateError) {
+                  console.warn('Failed to update user profile row:', updateError.message);
+                }
+              } else {
+                const { error: insertError } = await supabase.from('user_profiles').insert({
+                  user_id: currentUser.id,
+                  email: currentUser.email,
+                  role: 'user',
+                  created_at: new Date().toISOString()
+                });
+
+                if (insertError) {
+                  console.warn('Failed to initialize user profile row:', insertError.message);
+                }
+              }
             } catch (error: any) {
               console.warn('Failed to initialize user profile row:', error.message);
             }
@@ -367,7 +405,11 @@ export default function App() {
   };
 
   const handleSignOut = async () => {
-    await supabase.auth.signOut();
+    try {
+      await supabase.auth.signOut({ scope: 'local' });
+    } catch (error: any) {
+      console.warn('Failed to sign out:', error?.message || error);
+    }
   };
 
   const triggerAlertScreenWithPermission = async () => {

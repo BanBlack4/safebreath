@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { motion } from 'motion/react';
 import { Heart, LogIn, Mail, Lock } from 'lucide-react';
 import { toast } from 'react-hot-toast';
-import { supabase } from '../services/supabaseClient'; // Asegúrate que esta ruta sea correcta
+import { clearSupabaseAuthHash, supabase } from '../services/supabaseClient';
 
 interface OnboardingScreenProps {
   onComplete: () => void;
@@ -17,11 +17,27 @@ export default function OnboardingScreen({ onComplete }: OnboardingScreenProps) 
 
   // Verificamos si ya hay sesión al cargar
   React.useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      if (data.session) {
-        onComplete();
+    let isMounted = true;
+
+    const checkExistingSession = async () => {
+      try {
+        const { data } = await supabase.auth.getSession();
+        if (!isMounted) return;
+
+        if (data.session) {
+          clearSupabaseAuthHash();
+          onComplete();
+        }
+      } catch {
+        clearSupabaseAuthHash();
       }
-    });
+    };
+
+    checkExistingSession();
+
+    return () => {
+      isMounted = false;
+    };
   }, [onComplete]);
 
   const handleGoogleLogin = async () => {
